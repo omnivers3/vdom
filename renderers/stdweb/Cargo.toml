@@ -1,0 +1,15 @@
+[package]
+name = "vdom_renderers_stdweb"
+version = "0.1.0"
+authors = ["Perry Birch <perrybirch@vizidrix.com>"]
+description = "Render target for omnivers3/vdom which binds to StdWeb"
+documentation = "https://docs.rs/vdom"
+homepage = "https://github.com/omnivers3/vdom"
+repository = "https://github.com/omnivers3/vdom"
+readme = "../README.md"
+keywords = ["omnivers3", "web", "dom", "vdom", "rendertarget", "wasm", "stdweb"]
+license = "MIT"
+
+[dependencies]
+stdweb = "*"
+vdom = { path = "../../vdom" }

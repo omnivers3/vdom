@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "vdom",
+    "renderers/stdweb",
+    "examples/button"
+]

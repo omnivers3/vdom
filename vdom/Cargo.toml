@@ -1,0 +1,15 @@
+[package]
+name = "vdom"
+version = "0.1.0"
+authors = ["Perry Birch <perrybirch@vizidrix.com>"]
+description = "Virtual Dom abstraction for Web Assembly in Rust"
+documentation = "https://docs.rs/vdom"
+homepage = "https://github.com/omnivers3/vdom"
+repository = "https://github.com/omnivers3/vdom"
+readme = "../README.md"
+keywords = ["omnivers3", "web", "dom", "vdom"]
+license = "MIT"
+
+[dependencies]
+serde = "1"
+serde_derive = "1"

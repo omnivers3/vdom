@@ -1,0 +1,9 @@
+[package]
+name = "vdom_renderers_stdweb_examples_button"
+version = "0.1.0"
+authors = ["Perry Birch <perry_m_birch@homedepot.com>"]
+
+[dependencies]
+vdom = { path = "../../vdom" }
+vdom_renderers_stdweb = { path = "../../renderers/stdweb" }
+stdweb = "*"
