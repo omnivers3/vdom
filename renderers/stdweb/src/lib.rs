@@ -14,10 +14,11 @@ use stdweb::web::{
     // NodeType,
     document,
     Element,
-    // HtmlElement,
+    HtmlElement,
     // IElement,
     IEventTarget,
     INode,
+    Node,
     IParentNode,
     // window,
 };
@@ -78,7 +79,7 @@ pub enum Errors {
 pub struct App<TModel, TActions> where
     TModel: Component<TActions>,
     // TActions: 'static + Clone,
-    TActions: Clone,
+    TActions: Clone + std::fmt::Debug,
 {
     // model: Rc<Mutex<TModel>>,
     // model: RefCell<TModel>,
@@ -101,21 +102,21 @@ unsafe impl<TModel, TActions> Sync for App<TModel, TActions>where
 {}
 
 
-impl <TModel, TActions> RenderTarget<TActions> for App<TModel, TActions> where
-    TModel: 'static + Clone + Component<TActions>,
-    // TActions: 'static + Clone + std::fmt::Debug,
-    TActions: 'static + Clone + std::fmt::Debug,
-{
-    fn apply_patches(self, patches: PatchTypes<TActions>) {
-        let model = self.model.clone();
-        let target = self.target.clone();
-        // apply_patches(target, patches, Rc::new(| action | {
-        //     println!("handler action: {:?}", action);
-        //     self.model.handle(action);
-        // }));
-        apply_patches(model, target, patches);
-    }
-}
+// impl <TModel, TActions> RenderTarget<TActions> for App<TModel, TActions> where
+//     TModel: 'static + Clone + Component<TActions>,
+//     // TActions: 'static + Clone + std::fmt::Debug,
+//     TActions: 'static + Clone + std::fmt::Debug,
+// {
+//     fn apply_patches(self, patches: PatchTypes<TActions>) {
+//         let model = self.model.clone();
+//         let target = self.target.clone();
+//         // apply_patches(target, patches, Rc::new(| action | {
+//         //     println!("handler action: {:?}", action);
+//         //     self.model.handle(action);
+//         // }));
+//         apply_patches(model, target, patches);
+//     }
+// }
 
 impl <TModel, TActions> App<TModel, TActions> where
     TModel: 'static + Clone + Component<TActions>,
@@ -160,7 +161,20 @@ impl <TModel, TActions> App<TModel, TActions> where
         });
 
         let vdom = self.vdom.clone();
-        apply_vdom(self, NodeTypes::Empty, vdom);
+        let patches = diff(&NodeTypes::Empty, &vdom);
+        println!("Exec Patches: {:?}", patches);
+        if let Some (patches) = patches {
+            // target.apply_patches(patches);
+            let model = self.model.clone();
+            let vdom = self.vdom.clone();
+            let target = self.target.clone();
+            // apply_patches(target, patches, Rc::new(| action | {
+            //     println!("handler action: {:?}", action);
+            //     self.model.handle(action);
+            // }));
+            apply_patches(model, vdom, target, patches);
+        }
+        // apply_vdom(self, NodeTypes::Empty, vdom);
 
         stdweb::event_loop();
     }
@@ -182,6 +196,7 @@ fn apply_patches<TModel, TActions>(
     // app: &App<TModel, TActions>,
     // model: RefCell<TModel>,
     model: Arc<Mutex<TModel>>,
+    vdom: NodeTypes<TActions>,
     target: Element,
     patches: PatchTypes<TActions>,
     // handler: Rc<FHandler>,
@@ -228,8 +243,9 @@ fn apply_patches<TModel, TActions>(
             for child in children {
                 // apply_patches(element.to_owned(), child, handler.clone())
                 let model = model.clone();
+                let vdom = vdom.clone();
                 let element = element.clone();
-                apply_patches(model, element, child);
+                apply_patches(model, vdom, element, child);
             }
         }
 
@@ -242,8 +258,11 @@ fn apply_patches<TModel, TActions>(
             // let model = model.borrow_mut();
             let model = model.clone();
             let arc_model = Arc::clone(&model);
+            let vdom = vdom.clone();
+            let event_target = target.clone();
+            // let target2 = target.clone();
             
-            let _handle = target.add_event_listener(move |event: ClickEvent| {
+            let _handle = event_target.add_event_listener(move |event: ClickEvent| {
                 // let vdom_event = map_event(&handler_type, &event);
                 println!("Clicked: {:?} - {:?}", action_target, EventDataTypes::Click);
                 // let (_, action) = action_target;
@@ -254,7 +273,22 @@ fn apply_patches<TModel, TActions>(
                 // model.handle(action);
                 let mut mut_model = arc_model.lock().unwrap();
                 mut_model.handle(action);
+                let target_vdom = mut_model.render();
                 println!("Model: {:?}", mut_model);
+                // let vdom = self.vdom.clone();
+                let patches = diff(&vdom.clone(), &target_vdom);
+                println!("Event Patches: {:?}", patches);
+                if let Some (patches) = patches {
+                    // target.apply_patches(patches);
+                    // let model = self.model.clone();
+                    // let vdom = 
+                    // let target = self.target.clone();
+                    // apply_patches(target, patches, Rc::new(| action | {
+                    //     println!("handler action: {:?}", action);
+                    //     self.model.handle(action);
+                    // }));
+                    apply_patches(model.clone(), vdom.clone(), target.clone(), patches);
+                }
                 // t.handle(action);
             });
             // let bind = self.bind.clone();
@@ -270,7 +304,22 @@ fn apply_patches<TModel, TActions>(
             //         //(bind)(action.to_owned(), handler_type.to_owned(), map_event(&handler_type, &event));
             //     }
             // ));
-        }
+        },
+
+        PatchTypes::Update ( patch_set ) => {
+            for i in 0..patch_set.len() {
+                let child_nodes: Vec<Node> = target.child_nodes().iter().collect();
+                for j in 0..child_nodes.len() {
+                    let patches = &patch_set[i];
+                    // let child: HtmlElement = child_nodes[j].try_into();
+                    // apply_patches(model.clone(), vdom.clone(), child.clone(), patches);
+                    apply_patches(model.clone(), vdom.clone(), target.clone(), patches.clone());
+                }
+            }
+            // for patches in patch_set {
+            //     apply_patches(model.clone(), vdom.clone(), target.clone(), patches);
+            // }
+        },
     }
 }
 

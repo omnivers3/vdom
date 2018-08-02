@@ -53,13 +53,14 @@ pub enum HandlerTypes {
 #[derive(Clone, Debug, PartialEq)]
 #[derive(Serialize, Deserialize)]
 pub enum PatchTypes<TActions> where
-    TActions: Clone,
+    TActions: Clone + std::fmt::Debug,
 {
     Empty,
     AddComment ( String ),
     SetText ( String ),
     AddElement ( String, Vec<(String, String)>, Vec<PatchTypes<TActions>> ),
     AddHandler ( HandlerTypes, ActionTarget<TActions> ),
+    Update ( Vec<PatchTypes<TActions>> ),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -205,39 +206,39 @@ mod tests {
     }
 }
 
-pub trait RenderTarget<TActions> where
-    Self: Clone,
-    TActions: Clone,
-{
-    fn apply_patches(self, patches: PatchTypes<TActions>);
-}
+// pub trait RenderTarget<TActions> where
+//     Self: Clone,
+//     TActions: Clone,
+// {
+//     fn apply_patches(self, patches: PatchTypes<TActions>);
+// }
 
 pub trait Component<TActions> where
     Self: Clone + Default + std::fmt::Debug,
-    TActions: Clone,
+    TActions: Clone + std::fmt::Debug,
 {
     fn render(&self) -> NodeTypes<TActions>;
     fn handle(&mut self, action: TActions);
 }
 
-pub fn apply_vdom<TActions>(
-    target: impl RenderTarget<TActions>,
-    current_vdom: NodeTypes<TActions>,
-    target_vdom: NodeTypes<TActions>
-) where
-    TActions: Clone + std::fmt::Debug,
-{
-    let diff_result = diff(current_vdom, target_vdom);
-    println!("Diff: {:?}", diff_result);
-    if let Some (patches) = diff_result {
-        target.apply_patches(patches);
-    }
-}
+// pub fn apply_vdom<TActions>(
+//     target: impl RenderTarget<TActions>,
+//     current_vdom: NodeTypes<TActions>,
+//     target_vdom: NodeTypes<TActions>
+// ) where
+//     TActions: Clone + std::fmt::Debug,
+// {
+//     let diff_result = diff(current_vdom, target_vdom);
+//     println!("Diff: {:?}", diff_result);
+//     if let Some (patches) = diff_result {
+//         target.apply_patches(patches);
+//     }
+// }
 
 fn build<TActions>(
     target: &NodeTypes<TActions>
 ) -> PatchTypes<TActions> where
-    TActions: Clone,
+    TActions: Clone + std::fmt::Debug,
 {
     
     match target {
@@ -266,36 +267,111 @@ fn build<TActions>(
 
 }
 
-/// TODO: Implement the remove diff
-fn remove<TActions>() -> PatchTypes<TActions> where
-    TActions: Clone,
-{
-    PatchTypes::Empty
-}
+// /// TODO: Implement the remove diff
+// fn remove<TActions>() -> PatchTypes<TActions> where
+//     TActions: Clone + std::fmt::Debug,
+// {
+//     println!("Remove not implemented");
+//     PatchTypes::Empty
+// }
 
 /// TODO: Implement the delta diff
-fn delta<TActions>(
-    current: NodeTypes<TActions>,
-    desired: NodeTypes<TActions>
-) -> Option<PatchTypes<TActions>> where
-    TActions: Clone,
-{
-    None
-}
+// fn delta<TActions>(
+//     current: NodeTypes<TActions>,
+//     desired: NodeTypes<TActions>
+// ) -> Option<PatchTypes<TActions>> where
+//     TActions: Clone + std::fmt::Debug,
+// {
+//     println!("Delta not implemented");
+//     // None
+//     match ( &current, &desired ) {
+//         ( NodeTypes::)
+//         ( NodeTypes::Empty, NodeTypes::Empty ) => None,
 
-fn diff<TActions>(
-    current: NodeTypes<TActions>,
-    desired: NodeTypes<TActions>
+//         ( _, NodeTypes::Empty ) => Some ( remove() ),
+
+//         ( NodeTypes::Empty, _ ) => Some ( build(&desired) ),
+
+//         ( _, _ ) => {
+//             // delta(current, desired),
+//             println!("Delta [\n{:?}\n -> \n{:?}\n]", current, desired);
+//             None
+//         },
+//     }
+// }
+
+pub fn diff<TActions>(
+    current: &NodeTypes<TActions>,
+    desired: &NodeTypes<TActions>
 ) -> Option<PatchTypes<TActions>> where
-    TActions: Clone,
+    TActions: Clone + std::fmt::Debug,
 {
     match ( &current, &desired ) {
-        ( NodeTypes::Empty, NodeTypes::Empty ) => None,
+        ( NodeTypes::Empty, NodeTypes::Empty ) => {
+            Some ( PatchTypes::Empty )
+        },
 
-        ( _, NodeTypes::Empty ) => Some ( remove() ),
+        ( _, NodeTypes::Empty ) => {
+            Some ( PatchTypes::Empty )
+        },
 
-        ( NodeTypes::Empty, _ ) => Some ( build(&desired) ),
+        ( NodeTypes::Empty, _ ) => {
+            Some ( build(&desired) )
+        },
 
-        ( _, _ ) => delta(current, desired),
+        ( NodeTypes::Comment (prev_value), NodeTypes::Comment (new_value) ) => {
+            // TODO: Should replace comment not just add new one
+            Some ( PatchTypes::AddComment (new_value.to_owned()) )
+        },
+
+        ( NodeTypes::Comment (value), _ ) => {
+            println!("Replacing node\n{:?}\n\twith comment: {:?}", current, value);
+            Some ( PatchTypes::Empty )
+        },
+
+        ( NodeTypes::Text (prev_value), NodeTypes::Text (new_value) ) => {
+            if prev_value == new_value {
+                None
+            } else {
+                Some ( PatchTypes::SetText (new_value.to_owned()) )
+            }
+        },
+
+        ( NodeTypes::Text (value), _ ) => {
+            println!("Replacing node\n{:?}\n\twith text: {:?}", current, value);
+            Some ( PatchTypes::Empty )
+        },
+
+        ( NodeTypes::Element (prev_elem), NodeTypes::Element (new_elem) ) => {
+            if prev_elem.kind != new_elem.kind {
+                println!("Swapped element kind");
+                None
+            } else { // Same kind
+                println!("Should resolve attrs between\n{:?}\nand\n{:?}\n", prev_elem.attributes, new_elem.attributes);
+                println!("Should resolve children between\n{:?}\nand\n{:?}\n", prev_elem.children, new_elem.children);
+                let mut diffs: Vec<PatchTypes<TActions>> = vec![];
+                for i in 0..prev_elem.children.len() {
+                    let prev_child = &prev_elem.children[i];
+                    for j in i..new_elem.children.len() {
+                        let new_child = &new_elem.children[j];
+                        if let Some (diff) = diff(prev_child, new_child) {
+                            println!("Diffed children\n{:?}\nand\n{:?}\n{:?}\n", prev_child, new_child, diff);
+                            diffs.push(diff);
+                        }
+                        
+                    }
+                }
+                Some ( PatchTypes::Update (diffs) )
+                // for child in prev_elem.children {
+                //     let diff = diff(child)
+                // }
+            }
+            // None
+        },
+
+        ( _, _ ) => {
+            println!("Diff not yet implemented between\n{:?}\nand\n{:?}\n", current, desired);
+            None
+        },
     }
 }
