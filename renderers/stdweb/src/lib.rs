@@ -18,15 +18,14 @@ use stdweb::web::{
     // IElement,
     IEventTarget,
     INode,
-    Node,
     IParentNode,
     // window,
+    Node,
 };
 
 use vdom::*;
 
 use stdweb::web::event::{
-    ConcreteEvent,
     // IEvent,
     // DoubleClickEvent,
     ClickEvent,
@@ -34,6 +33,7 @@ use stdweb::web::event::{
     // ChangeEvent,
     // BlurEvent,
     // HashChangeEvent
+    ConcreteEvent,
 };
 
 // // Shamelessly stolen from webplatform's TodoMVC example.
@@ -71,12 +71,13 @@ pub fn remove_attribute(element: &Element, name: &str) {
 #[derive(Clone, Debug)]
 pub enum Errors {
     MountSelectorError,
-    InvalidMountSelector (String),
+    InvalidMountSelector(String),
     AppTerminated,
 }
 
 #[derive(Clone)]
-pub struct App<TModel, TActions> where
+pub struct App<TModel, TActions>
+where
     TModel: Component<TActions>,
     // TActions: 'static + Clone,
     TActions: Clone + std::fmt::Debug,
@@ -89,18 +90,19 @@ pub struct App<TModel, TActions> where
     // handler: &'static FnMut(TActions) + Send,
 }
 
-unsafe impl<TModel, TActions> Send for App<TModel, TActions> where
+unsafe impl<TModel, TActions> Send for App<TModel, TActions>
+where
     TModel: Component<TActions>,
     // TActions: 'static + Clone + std::fmt::Debug,
     TActions: Clone + std::fmt::Debug,
 {}
 
-unsafe impl<TModel, TActions> Sync for App<TModel, TActions>where
+unsafe impl<TModel, TActions> Sync for App<TModel, TActions>
+where
     TModel: Component<TActions>,
     // TActions: 'static + Clone + std::fmt::Debug,
     TActions: Clone + std::fmt::Debug,
 {}
-
 
 // impl <TModel, TActions> RenderTarget<TActions> for App<TModel, TActions> where
 //     TModel: 'static + Clone + Component<TActions>,
@@ -118,10 +120,11 @@ unsafe impl<TModel, TActions> Sync for App<TModel, TActions>where
 //     }
 // }
 
-impl <TModel, TActions> App<TModel, TActions> where
+impl<TModel, TActions> App<TModel, TActions>
+where
     TModel: 'static + Clone + Component<TActions>,
     // TActions: 'static + Clone + std::fmt::Debug,
-    TActions: 'static + Clone + std::fmt::Debug,
+    TActions: 'static + Clone + Eq + Hash + std::fmt::Debug,
 {
     pub fn mount(target: Element) -> Result<Self, Errors> {
         // let model = Rc::new(Mutex::new(TModel::default()));
@@ -130,23 +133,22 @@ impl <TModel, TActions> App<TModel, TActions> where
         let vdom = model.render();
         let model = Arc::new(Mutex::new(model));
         // let vdom = model.borrow().render();
-        Ok (
-            App {
-                model,
-                target,
-                vdom,
-            }
-        )
+        Ok(App {
+            model,
+            target,
+            vdom,
+        })
     }
 
-    pub fn mount_to<T>(selector: T) -> Result<Self, Errors> where
-        T: ToString
+    pub fn mount_to<T>(selector: T) -> Result<Self, Errors>
+    where
+        T: ToString,
     {
         let selector = selector.to_string();
         document()
             .query_selector(&selector)
             .map_err(|_| Errors::MountSelectorError)
-            .and_then(|e| e.ok_or(Errors::InvalidMountSelector (selector)))
+            .and_then(|e| e.ok_or(Errors::InvalidMountSelector(selector)))
             .and_then(|target| App::mount(target))
     }
 
@@ -163,7 +165,7 @@ impl <TModel, TActions> App<TModel, TActions> where
         let vdom = self.vdom.clone();
         let patches = diff(&NodeTypes::Empty, &vdom);
         println!("Exec Patches: {:?}", patches);
-        if let Some (patches) = patches {
+        if let Some(patches) = patches {
             // target.apply_patches(patches);
             let model = self.model.clone();
             let vdom = self.vdom.clone();
@@ -204,22 +206,21 @@ fn apply_patches<TModel, TActions>(
     // FHandler: Fn(VActionTarget<TPayload>, HandlerTypes, EventDataTypes),
     TModel: 'static + Clone + Component<TActions>,
     // TActions: 'static + Clone + std::fmt::Debug,
-    TActions: 'static + Clone + std::fmt::Debug,
+    TActions: 'static + Clone + Eq + Hash + std::fmt::Debug,
     // FHandler: 'static + FnMut(TActions),
 {
     match patches {
-
         PatchTypes::Empty => {
             println!("Soul crushing emptyness");
-        },
+        }
 
-        PatchTypes::AddComment ( value ) => {
+        PatchTypes::AddComment(value) => {
             println!("\nNOT IMPLEMENTED!!\nAdd Comment: {:?}", value);
-        },
+        }
 
-        PatchTypes::SetText ( value ) => {
+        PatchTypes::SetText(value) => {
             println!("Set Text: {:?}", value);
-            target.set_text_content( &value );
+            target.set_text_content(&value);
             // match target.node_type() {
             //     NodeType::Element => {
             //         target.set_text_content( &value );
@@ -232,12 +233,12 @@ fn apply_patches<TModel, TActions>(
             // }
         }
 
-        PatchTypes::AddElement ( kind, attributes, children ) => {
+        PatchTypes::AddElement(kind, attributes, children) => {
             println!("Append Node: {:?}", kind);
             let element = document().create_element(&kind).unwrap();
             target.append_child(&element);
 
-            for ( key, value ) in attributes {
+            for (key, value) in attributes {
                 set_attribute(&element, &key, &value);
             }
             for child in children {
@@ -249,8 +250,11 @@ fn apply_patches<TModel, TActions>(
             }
         }
 
-        PatchTypes::AddHandler ( handler_type, action_target ) => {
-            println!("\nApply Handler: [ {:?} ] as [ {:?} ]", handler_type, action_target);
+        PatchTypes::AddHandler(handler_type, action_target) => {
+            println!(
+                "\nApply Handler: [ {:?} ] as [ {:?} ]",
+                handler_type, action_target
+            );
             // let a = action.clone();
             // let handler = handler.clone();
             // let model = model.clone();
@@ -261,7 +265,7 @@ fn apply_patches<TModel, TActions>(
             let vdom = vdom.clone();
             let event_target = target.clone();
             // let target2 = target.clone();
-            
+
             let _handle = event_target.add_event_listener(move |event: ClickEvent| {
                 // let vdom_event = map_event(&handler_type, &event);
                 println!("Clicked: {:?} - {:?}", action_target, EventDataTypes::Click);
@@ -278,10 +282,10 @@ fn apply_patches<TModel, TActions>(
                 // let vdom = self.vdom.clone();
                 let patches = diff(&vdom.clone(), &target_vdom);
                 println!("Event Patches: {:?}", patches);
-                if let Some (patches) = patches {
+                if let Some(patches) = patches {
                     // target.apply_patches(patches);
                     // let model = self.model.clone();
-                    // let vdom = 
+                    // let vdom =
                     // let target = self.target.clone();
                     // apply_patches(target, patches, Rc::new(| action | {
                     //     println!("handler action: {:?}", action);
@@ -304,9 +308,9 @@ fn apply_patches<TModel, TActions>(
             //         //(bind)(action.to_owned(), handler_type.to_owned(), map_event(&handler_type, &event));
             //     }
             // ));
-        },
+        }
 
-        PatchTypes::Update ( patch_set ) => {
+        PatchTypes::Update(patch_set) => {
             for i in 0..patch_set.len() {
                 let child_nodes: Vec<Node> = target.child_nodes().iter().collect();
                 for j in 0..child_nodes.len() {
@@ -319,7 +323,7 @@ fn apply_patches<TModel, TActions>(
             // for patches in patch_set {
             //     apply_patches(model.clone(), vdom.clone(), target.clone(), patches);
             // }
-        },
+        }
     }
 }
 

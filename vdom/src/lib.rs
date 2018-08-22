@@ -1,176 +1,242 @@
-use std::ops::Deref;
-
 #[macro_use]
 extern crate serde_derive;
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
-pub struct ActionTarget<TActions> where
-    TActions: Clone,
-{
-    pub payload: TActions,
-}
+use std::collections::hash_map::{ DefaultHasher };
+use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
-impl <TActions> ActionTarget<TActions> where
-    TActions: Clone,
-{
-    pub fn with_payload(payload: TActions) -> Self {
-        ActionTarget {
-            payload,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Attribute {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
-pub struct Element<TActions> where
-    TActions: Clone,
-{
-    pub kind: String,
-    pub attributes: Vec<Attribute>,
-    pub children: Vec<NodeTypes<TActions>>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
-pub enum EventDataTypes {
-    Click,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
-pub enum HandlerTypes {
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum EventTypes {
     OnClick,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
-pub enum PatchTypes<TActions> where
-    TActions: Clone + std::fmt::Debug,
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct Event<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
 {
-    Empty,
-    AddComment ( String ),
-    SetText ( String ),
-    AddElement ( String, Vec<(String, String)>, Vec<PatchTypes<TActions>> ),
-    AddHandler ( HandlerTypes, ActionTarget<TActions> ),
-    Update ( Vec<PatchTypes<TActions>> ),
+    pub event_type: EventTypes,
+    pub data: TEvents,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-#[derive(Serialize, Deserialize)]
-pub enum NodeTypes<TActions> where
-    TActions: Clone,
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum AttributeTypes<TEvents> 
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
 {
-    Empty,
-    Comment ( String ),
-    Text ( String ),
-    Element ( Element<TActions> ),
-    Handler ( HandlerTypes, ActionTarget<TActions> ),
+    Attribute(Attribute),
+    Event(Event<TEvents>),
 }
 
-impl <TActions> NodeTypes<TActions> where
-    TActions: Clone,
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct Element<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
 {
-    pub fn comment<T>(value: T) -> Self where
+    pub kind: String,
+    pub attributes: Vec<AttributeTypes<TEvents>>,
+    pub children: Vec<ContentTypes<TEvents>>,
+}
+
+impl<TEvents> Hash for Element<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
+{
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        state.write(&self.kind.as_bytes());
+        for attr in &self.attributes {
+            state.write_u64(calculate_hash(attr));
+        }
+        for child in &self.children {
+            state.write_u64(calculate_hash(child));
+        }
+        state.finish();
+    }
+}
+
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum ContentTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
+{
+    Comment(String),
+    Element(Element<TEvents>),
+    Text(String),
+    // Handler(HandlerTypes, ActionTarget<TEvents>),
+}
+
+impl<TEvents> ContentTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
+{
+    pub fn comment<T>(value: T) -> Self
+    where
         T: Into<String>,
     {
-        NodeTypes::Comment(
-            value.into()
-        )
+        ContentTypes::Comment(value.into())
     }
 
     /// Makes an instance of a Virtual Element with properties set to provided values
     pub fn element<TKind, TAttributes, TChildren>(
         kind: TKind,
         attributes: TAttributes,
-        children: TChildren
-    ) -> Self where
+        children: TChildren,
+    ) -> Self
+    where
         TKind: Into<String>,
-        TAttributes: Deref<Target=[Attribute]>,
-        TChildren: Deref<Target=[NodeTypes<TActions>]>,
+        TAttributes: Deref<Target = [AttributeTypes<TEvents>]>,
+        TChildren: Deref<Target = [ContentTypes<TEvents>]>,
     {
         let kind_: String = kind.into();
-        let attributes_: Vec<Attribute> = attributes.deref().to_vec();
-        let children_: Vec<NodeTypes<TActions>> = children.deref().to_vec();
-        NodeTypes::Element (
-            Element {
-                kind: kind_,
-                attributes: attributes_,
-                children: children_,
-            }
-        )
+        let attributes_: Vec<AttributeTypes<TEvents>> = attributes.deref().to_vec();
+        let children_: Vec<ContentTypes<TEvents>> = children.deref().to_vec();
+        ContentTypes::Element(Element {
+            kind: kind_,
+            attributes: attributes_,
+            children: children_,
+        })
     }
 
-    pub fn text<T>(value: T) -> Self where
+    pub fn text<T>(value: T) -> Self
+    where
         T: Into<String>,
     {
-        NodeTypes::Text (
-            value.into()
-        )
+        ContentTypes::Text(value.into())
     }
 }
 
-pub type ViewNode = NodeTypes<()>;
+pub type StaticAttribute = AttributeTypes<()>;
+pub type StaticElement = ContentTypes<()>;
 
-pub type RenderResult<TActions> = Option<NodeTypes<TActions>>;
+pub type RenderResult<TEvents> = Option<ContentTypes<TEvents>>;
 
-pub fn attribute<TKey, TValue>(key: TKey, value: TValue) -> Attribute where
+pub fn attribute<TEvents, TKey, TValue>(key: TKey, value: TValue) -> AttributeTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
     TKey: Into<String>,
     TValue: Into<String>,
 {
-    Attribute {
-        key: key.into(),
-        value: value.into(),
-    }
-}
-
-pub fn class<T>(class_name: T) -> Attribute where
-    T: Into<String>
-{
-    Attribute {
-        key: "class".to_string(),
-        value: class_name.into(),
-    }
-}
-
-pub fn text<TActions, T>(value: T) -> NodeTypes<TActions> where
-    TActions: Clone,
-    T: Into<String>
-{
-    NodeTypes::text(value)
-}
-
-macro_rules! element_kind {
-    ($kind: ident) => {
-        pub fn $kind<TActions>(
-            attributes: &[Attribute],
-            children: &[NodeTypes<TActions>]
-        ) -> NodeTypes<TActions> where
-            TActions: Clone,
-        {
-            NodeTypes::<TActions>::element(stringify!($kind), attributes, children)
+    AttributeTypes::Attribute(
+        Attribute {
+            key: key.into(),
+            value: value.into(),
         }
-    }
+    )
 }
 
-element_kind!(div);
-element_kind!(span);
-element_kind!(button);
+pub fn class<TEvents, TClassName>(class_name: TClassName) -> AttributeTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
+    TClassName: Into<String>,
+{
+    // AttributeTypes::Attribute("class".to_owned(), class_name.into())
+    // Attribute {
+    //     key: "class".to_string(),
+    //     value: class_name.into(),
+    // }
+    AttributeTypes::Attribute(
+        Attribute {
+            key: "class".to_string(),
+            value: class_name.into(),
+        }
+    )
+}
+
+pub fn comment<TEvents, T>(value: T) -> ContentTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
+    T: Into<String>,
+{
+    ContentTypes::comment(value)
+}
+
+pub fn text<TEvents, T>(value: T) -> ContentTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
+    T: Into<String>,
+{
+    ContentTypes::text(value)
+}
 
 #[macro_export]
 macro_rules! on_click {
     ($command: expr) => {
-        NodeTypes::Handler (
-            HandlerTypes::OnClick,
-            ActionTarget::with_payload($command),
-        )
+        AttributeTypes::Event(EventTypes::OnClick, $command)
+    };
+}
+
+fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+}
+
+macro_rules! attributes_expand {
+    ($($attributes:expr),*) => {{
+        $($attributes),*
+    }};
+}
+
+macro_rules! children_expand {
+    ($($children:expr),*) => {{
+        $($children),*
+    }};
+}
+
+macro_rules! element_kind {
+    ($kind:ident) => {
+        fn $kind(attributes: &[&str], children: &[&str]) -> () {
+            println!("args[{0:?}]: {1:?} / {2:?}", stringify!($kind), attributes, children);
+        }
+        macro_rules! $kind {
+            ($attributes:tt$children:tt) => {
+                element_kind!(@kind $kind [$attributes][$children])
+            }
+        }
+    };
+    (@kind $kind:ident [$($attributes:expr),*][$($children:expr),*]) => {
+        let attributes = attributes_expand!($($attributes),*);
+        println!("attributes: {0:?}", attributes);
+        let children = children_expand!($($children),*);
+        println!("children: {0:?}", children);
+        $kind(&attributes, &children);
+    }
+
+}
+
+element_kind!(button);
+element_kind!(div);
+element_kind!(span);
+
+pub trait Component<TEvents>
+where
+    Self: Clone + Default + std::fmt::Debug,
+    TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+{
+    fn render(&self) -> ContentTypes<TEvents>;
+    fn handle(&mut self, action: TEvents);
+}
+
+macro_rules! attr {
+    ($key: ident, $value: ident) => {
+        let value: &str = &format!("{0:?}={1:?}", stringify!($key), stringify!($value));
+        value
+    }
+}
+
+macro_rules! text {
+    ($value: ident) => {
+        let value: &str = &stringify!($value);
+        value
     }
 }
 
@@ -178,55 +244,110 @@ macro_rules! on_click {
 mod tests {
     use super::*;
 
-    #[test]
-    fn should_build_vdom_tree() {
-        let view: ViewNode =
-            div(
-                &[],
-                &[ text(
-                    format!("{:}", 10)
-                )],
-            );
-        
-        match view {
-            NodeTypes::Element(e) => {
-                assert_eq!(e.kind, "div");
-                assert_eq!(e.attributes.len(), 0);
-                assert_eq!(e.children.len(), 1);
+    
 
-                match e.children[0] {
-                    NodeTypes::Text(ref text) => {
-                        assert_eq!(text, "10");
-                    },
-                    _ => assert!(false)
-                }
-            }
-            _ => assert!(false)
-        }
+    #[test]
+    fn static_elem() {
+        let elem = div!([""][""]);
+            // div!(
+            //     [ class!["asdf"]
+            //     , attr!["key", "abcd"]
+            //     ]
+            //     // [ span!(
+            //     //     []
+            //     //     [ text!("fdsa")
+            //     //     ])
+            //     [ text!("text")
+            //     , text!("dbca")
+            //     ]);
+
+        // elem.diff(None)
+
+        // println!("class: {:?}", class!("blue"));
+        // println!("class: {:?}", class!("blue", "green"));
+        // println!("class: {:?}", class!("blue", value, data3("asdfs".to_owned())));
+        // // println!("class: {:?}", class!(10, 10, 10));
+        // println!("class: {:?}", class!("blue", value, value, "black"));
+
+        assert!(false);
     }
+
+    #[test]
+    fn should_hash_attributes() {
+        let attr: StaticAttribute = attribute("key", "value");
+        let base = calculate_hash(&attr);
+        assert_eq!(base, base);
+
+        let attr: StaticAttribute = attribute("key", "value");
+        let same = calculate_hash(&attr);
+        assert_eq!(base, same);
+
+        let attr: StaticAttribute = attribute("key2", "value");
+        let diff_key = calculate_hash(&attr);
+        assert!(base != diff_key);
+
+        let attr: StaticAttribute = attribute("key", "value2");
+        let diff_value = calculate_hash(&attr);
+        assert!(base != diff_value);
+    }
+
+    // #[test]
+    // fn should_hash_elements() {
+    //     let base_node: StaticElement = div(&[], &[]);
+    //     let base = calculate_hash(&base_node);
+    //     assert_eq!(base, base);
+
+    //     let same_node: StaticElement = div(&[], &[]);
+    //     let same = calculate_hash(&same_node);
+    //     assert_eq!(base, same);
+        
+    //     let span_node: StaticElement = span(&[], &[]);
+    //     let span = calculate_hash(&span_node);
+    //     assert!(base != span);
+    // }
+
+    // #[test]
+    // fn should_build_vdom_tree() {
+    //     let view: StaticElement = div(&[], &[text(format!("{:}", 10))]);
+
+    //     match view {
+    //         ContentTypes::Element(e) => {
+    //             assert_eq!(e.kind, "div");
+    //             assert_eq!(e.attributes.len(), 0);
+    //             assert_eq!(e.children.len(), 1);
+
+    //             match e.children[0] {
+    //                 ContentTypes::Text(ref text) => {
+    //                     assert_eq!(text, "10");
+    //                 }
+    //                 _ => assert!(false),
+    //             }
+    //         }
+    //         _ => assert!(false),
+    //     }
+    // }
+
+    // #[test]
+    // fn should_diff_text_elements() {
+    //     let delta: Option<PatchTypes<()>> = diff(&Some(text("asdf")), &text("fdsa"));
+
+    //     assert_eq!(delta, Some(PatchTypes::SetText("fdsa".to_owned())));
+    // }
 }
 
-// pub trait RenderTarget<TActions> where
+// pub trait RenderTarget<TEvents> where
 //     Self: Clone,
-//     TActions: Clone,
+//     TEvents: Clone,
 // {
-//     fn apply_patches(self, patches: PatchTypes<TActions>);
+//     fn apply_patches(self, patches: PatchTypes<TEvents>);
 // }
 
-pub trait Component<TActions> where
-    Self: Clone + Default + std::fmt::Debug,
-    TActions: Clone + std::fmt::Debug,
-{
-    fn render(&self) -> NodeTypes<TActions>;
-    fn handle(&mut self, action: TActions);
-}
-
-// pub fn apply_vdom<TActions>(
-//     target: impl RenderTarget<TActions>,
-//     current_vdom: NodeTypes<TActions>,
-//     target_vdom: NodeTypes<TActions>
+// pub fn apply_vdom<TEvents>(
+//     target: impl RenderTarget<TEvents>,
+//     current_vdom: ContentTypes<TEvents>,
+//     target_vdom: ContentTypes<TEvents>
 // ) where
-//     TActions: Clone + std::fmt::Debug,
+//     TEvents: Clone + std::fmt::Debug,
 // {
 //     let diff_result = diff(current_vdom, target_vdom);
 //     println!("Diff: {:?}", diff_result);
@@ -235,62 +356,57 @@ pub trait Component<TActions> where
 //     }
 // }
 
-fn build<TActions>(
-    target: &NodeTypes<TActions>
-) -> PatchTypes<TActions> where
-    TActions: Clone + std::fmt::Debug,
-{
-    
-    match target {
+// fn build<TEvents>(target: &ContentTypes<TEvents>) -> PatchTypes<TEvents>
+// where
+//     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+// {
+//     match target {
+//         ContentTypes::Empty => PatchTypes::Empty,
 
-        NodeTypes::Empty => PatchTypes::Empty,
+//         ContentTypes::Comment(value) => PatchTypes::AddComment(value.to_owned()),
 
-        NodeTypes::Comment ( value ) => PatchTypes::AddComment ( value.to_owned() ),
+//         ContentTypes::Text(value) => PatchTypes::SetText(value.to_owned()),
 
-        NodeTypes::Text ( value ) => PatchTypes::SetText ( value.to_owned() ),
+//         ContentTypes::Element(element) => PatchTypes::AddElement(
+//             element.kind.to_owned(),
+//             element
+//                 .attributes
+//                 .iter()
+//                 .map(|attr| (attr.key.to_owned(), attr.value.to_owned()))
+//                 .collect(),
+//             element.children.iter().map(|child| build(child)).collect(),
+//         ),
 
-        NodeTypes::Element ( element ) => PatchTypes::AddElement (
-            element.kind.to_owned(),
-            element.attributes.iter().map(|attr| ( attr.key.to_owned(), attr.value.to_owned())).collect(),
-            element.children.iter().map(|child| {
-                build(child)
-            }).collect(),
-        ),
-
-        NodeTypes::Handler ( handler, action ) => {
-            PatchTypes::AddHandler (
-                handler.to_owned(),
-                action.to_owned(),
-            )
-        }
-    }
-
-}
+//         ContentTypes::Handler(handler, action) => {
+//             PatchTypes::AddHandler(handler.to_owned(), action.to_owned())
+//         }
+//     }
+// }
 
 // /// TODO: Implement the remove diff
-// fn remove<TActions>() -> PatchTypes<TActions> where
-//     TActions: Clone + std::fmt::Debug,
+// fn remove<TEvents>() -> PatchTypes<TEvents> where
+//     TEvents: Clone + std::fmt::Debug,
 // {
 //     println!("Remove not implemented");
 //     PatchTypes::Empty
 // }
 
-/// TODO: Implement the delta diff
-// fn delta<TActions>(
-//     current: NodeTypes<TActions>,
-//     desired: NodeTypes<TActions>
-// ) -> Option<PatchTypes<TActions>> where
-//     TActions: Clone + std::fmt::Debug,
+// /// TODO: Implement the delta diff
+// fn delta<TEvents>(
+//     current: ContentTypes<TEvents>,
+//     desired: ContentTypes<TEvents>
+// ) -> Option<PatchTypes<TEvents>> where
+//     TEvents: Clone + std::fmt::Debug,
 // {
 //     println!("Delta not implemented");
 //     // None
 //     match ( &current, &desired ) {
-//         ( NodeTypes::)
-//         ( NodeTypes::Empty, NodeTypes::Empty ) => None,
+//         ( ContentTypes::)
+//         ( ContentTypes::Empty, ContentTypes::Empty ) => None,
 
-//         ( _, NodeTypes::Empty ) => Some ( remove() ),
+//         ( _, ContentTypes::Empty ) => Some ( remove() ),
 
-//         ( NodeTypes::Empty, _ ) => Some ( build(&desired) ),
+//         ( ContentTypes::Empty, _ ) => Some ( build(&desired) ),
 
 //         ( _, _ ) => {
 //             // delta(current, desired),
@@ -300,78 +416,214 @@ fn build<TActions>(
 //     }
 // }
 
-pub fn diff<TActions>(
-    current: &NodeTypes<TActions>,
-    desired: &NodeTypes<TActions>
-) -> Option<PatchTypes<TActions>> where
-    TActions: Clone + std::fmt::Debug,
-{
-    match ( &current, &desired ) {
-        ( NodeTypes::Empty, NodeTypes::Empty ) => {
-            Some ( PatchTypes::Empty )
-        },
+// pub fn diff<TEvents>(
+//     current: &ContentTypes<TEvents>,
+//     desired: &ContentTypes<TEvents>,
+// ) -> Option<PatchTypes<TEvents>>
+// where
+//     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+// {
+//     match (&current, &desired) {
+//         (ContentTypes::Empty, ContentTypes::Empty) => Some(PatchTypes::Empty),
 
-        ( _, NodeTypes::Empty ) => {
-            Some ( PatchTypes::Empty )
-        },
+//         (_, ContentTypes::Empty) => Some(PatchTypes::Empty),
 
-        ( NodeTypes::Empty, _ ) => {
-            Some ( build(&desired) )
-        },
+//         (ContentTypes::Empty, _) => Some(build(&desired)),
 
-        ( NodeTypes::Comment (prev_value), NodeTypes::Comment (new_value) ) => {
-            // TODO: Should replace comment not just add new one
-            Some ( PatchTypes::AddComment (new_value.to_owned()) )
-        },
+//         (ContentTypes::Comment(prev_value), ContentTypes::Comment(new_value)) => {
+//             // TODO: Should replace comment not just add new one
+//             Some(PatchTypes::AddComment(new_value.to_owned()))
+//         }
 
-        ( NodeTypes::Comment (value), _ ) => {
-            println!("Replacing node\n{:?}\n\twith comment: {:?}", current, value);
-            Some ( PatchTypes::Empty )
-        },
+//         (ContentTypes::Comment(value), _) => {
+//             println!("Replacing node\n{:?}\n\twith comment: {:?}", current, value);
+//             Some(PatchTypes::Empty)
+//         }
 
-        ( NodeTypes::Text (prev_value), NodeTypes::Text (new_value) ) => {
-            if prev_value == new_value {
-                None
-            } else {
-                Some ( PatchTypes::SetText (new_value.to_owned()) )
-            }
-        },
+//         (ContentTypes::Text(prev_value), ContentTypes::Text(new_value)) => {
+//             if prev_value == new_value {
+//                 None
+//             } else {
+//                 Some(PatchTypes::SetText(new_value.to_owned()))
+//             }
+//         }
 
-        ( NodeTypes::Text (value), _ ) => {
-            println!("Replacing node\n{:?}\n\twith text: {:?}", current, value);
-            Some ( PatchTypes::Empty )
-        },
+//         (ContentTypes::Text(value), _) => {
+//             println!("Replacing node\n{:?}\n\twith text: {:?}", current, value);
+//             Some(PatchTypes::Empty)
+//         }
 
-        ( NodeTypes::Element (prev_elem), NodeTypes::Element (new_elem) ) => {
-            if prev_elem.kind != new_elem.kind {
-                println!("Swapped element kind");
-                None
-            } else { // Same kind
-                println!("Should resolve attrs between\n{:?}\nand\n{:?}\n", prev_elem.attributes, new_elem.attributes);
-                println!("Should resolve children between\n{:?}\nand\n{:?}\n", prev_elem.children, new_elem.children);
-                let mut diffs: Vec<PatchTypes<TActions>> = vec![];
-                for i in 0..prev_elem.children.len() {
-                    let prev_child = &prev_elem.children[i];
-                    for j in i..new_elem.children.len() {
-                        let new_child = &new_elem.children[j];
-                        if let Some (diff) = diff(prev_child, new_child) {
-                            println!("Diffed children\n{:?}\nand\n{:?}\n{:?}\n", prev_child, new_child, diff);
-                            diffs.push(diff);
-                        }
-                        
-                    }
-                }
-                Some ( PatchTypes::Update (diffs) )
-                // for child in prev_elem.children {
-                //     let diff = diff(child)
-                // }
-            }
-            // None
-        },
+//         (ContentTypes::Element(prev_elem), ContentTypes::Element(new_elem)) => {
+//             if prev_elem.kind != new_elem.kind {
+//                 println!("Swapped element kind");
+//                 None
+//             } else {
+//                 // Same kind
+//                 println!(
+//                     "Should resolve attrs between\n{:?}\nand\n{:?}\n",
+//                     prev_elem.attributes, new_elem.attributes
+//                 );
+//                 println!(
+//                     "Should resolve children between\n{:?}\nand\n{:?}\n",
+//                     prev_elem.children, new_elem.children
+//                 );
+//                 let mut diffs: Vec<PatchTypes<TEvents>> = vec![];
+//                 for i in 0..prev_elem.children.len() {
+//                     let prev_child = &prev_elem.children[i];
+//                     for j in i..new_elem.children.len() {
+//                         let new_child = &new_elem.children[j];
+//                         if let Some(diff) = diff(prev_child, new_child) {
+//                             println!(
+//                                 "Diffed children\n{:?}\nand\n{:?}\n{:?}\n",
+//                                 prev_child, new_child, diff
+//                             );
+//                             diffs.push(diff);
+//                         }
+//                     }
+//                 }
+//                 Some(PatchTypes::Update(diffs))
+//                 // for child in prev_elem.children {
+//                 //     let diff = diff(child)
+//                 // }
+//             }
+//             // None
+//         }
 
-        ( _, _ ) => {
-            println!("Diff not yet implemented between\n{:?}\nand\n{:?}\n", current, desired);
-            None
-        },
-    }
-}
+//         (_, _) => {
+//             println!(
+//                 "Diff not yet implemented between\n{:?}\nand\n{:?}\n",
+//                 current, desired
+//             );
+//             None
+//         }
+//     }
+// }
+
+
+// macro_rules! class_expand {
+//     ((), ($($arg:expr),*)) => {{
+//         [$($arg),*]
+//     }};
+
+//     (($next:expr, $($rest:expr,)*), ($($arg:expr),*)) => {{
+//         let class: &str = $next;
+//         class_expand!(($($rest,)*), ($($arg,)* class))
+//     }};
+// }
+
+// macro_rules! class {
+//     ($($class:expr),*) => { class_expand!(($($class,)*), ()) }
+// }
+
+// // TODO: Attributes as a hashset
+
+
+// macro_rules! attribute_expand {
+//     ((), ($($arg:expr),*)) => {{
+//         ([$($arg),*])
+//     }};
+
+//     (($next:expr, $($rest:expr,)*), ($($arg:expr),*)) => {{
+//         let attribute: &str = $next;
+//         attribute_expand!(($($rest,)*), ($($arg,)* attribute))
+//     }};
+// }
+
+// macro_rules! attribute {
+//     ($($attribute:expr),*) => { attribute_expand!(($($attribute,)*), ()) }
+// }
+
+// macro_rules! element {
+//     ($kind: ident) => {
+//         macro_rules! $kind {
+//             ([$attributes:expr], [$children:expr]) => {
+//                 {
+//                     println!(stringify!($kind));
+//                 }
+//                 // ( stringify!($kind), attribute!($attributes), attribute!($children) )
+//             };
+//             // ($($attributes:expr),*,$($children:expr),*) => { class_expand!(($($attributes,)*), (), ($($children,)*)) }
+//             // ($data: expr) => {
+//             //     pub fn $kind() {
+//             //         println!("{:?}: {:?}", stringify!($kind), $data);
+//             //     }
+//             // }
+//             (($attributes:expr), ($children:expr),) => {
+//                 kind!($attributes, $children)
+//                 // ( stringify!($kind), attribute!($attributes), attribute!($children) )
+//             };
+//         }
+//     };
+// }
+
+// element!(blah);
+
+// blah!(["stuff"], ["asdf"]);
+
+// macro_rules! element_kind_fn {
+//     ($kind: ident) => {
+//         pub fn $kind<TEvents>(
+//             attributes: &[AttributeTypes<TEvents>],
+//             children: &[ContentTypes<TEvents>],
+//         ) -> ContentTypes<TEvents>
+//         where
+//             TEvents: Clone + Eq + Hash + PartialEq,
+//         {
+//             ContentTypes::<TEvents>::element(stringify!($kind), attributes, children)
+//         }
+//     };
+// }
+
+// element_kind_fn!(div);
+// element_kind_fn!(span);
+// element_kind_fn!(button);
+
+// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+// pub enum EventDataTypes {
+//     Click,
+// }
+
+// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+// pub enum HandlerTypes {
+//     OnClick,
+// }
+
+// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+// pub enum PatchTypes<TEvents>
+// where
+//     TEvents: Clone + std::fmt::Debug,
+// {
+//     SetText(String),
+//     AddElement(String, Vec<(String, String)>, Vec<PatchTypes<TEvents>>),
+//     AddHandler(HandlerTypes, ActionTarget<TEvents>),
+//     Update(Vec<PatchTypes<TEvents>>),
+// }
+
+
+// fn s_element(kind: &'static str, attributes: &[&'static str], children: &[&'static str]) {
+//     println!("Element: {:?}", kind);
+// }
+
+// fn data(v: u64) -> String {
+//     if v < 1000 {
+//         "foo".to_owned()
+//     } else {
+//         "bar".to_owned()
+//     }
+// }
+
+// fn data2<'a>(v: u64) -> &'a str {
+//     if v < 1000 {
+//         "foo"
+//     } else {
+//         "bar"
+//     }
+// }
+
+// fn data3(v: String) -> &'static str {
+//     if v == "asdf" {
+//         "foo"
+//     } else {
+//         "bar"
+//     }
+// }
