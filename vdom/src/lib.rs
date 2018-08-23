@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use std::collections::hash_map::{ DefaultHasher };
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
@@ -26,7 +26,7 @@ where
 }
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum AttributeTypes<TEvents> 
+pub enum AttributeTypes<TEvents>
 where
     TEvents: Clone + Eq + Hash + PartialEq,
 {
@@ -70,6 +70,8 @@ where
 {
     Comment(String),
     Element(Element<TEvents>),
+    // Fragment(&'static Fragment<TEvents>),
+    Fragment(Element<TEvents>),
     Text(String),
     // Handler(HandlerTypes, ActionTarget<TEvents>),
 }
@@ -114,6 +116,10 @@ where
     }
 }
 
+pub enum PatchTypes<TEvents> {
+    Event (TEvents)
+}
+
 pub type StaticAttribute = AttributeTypes<()>;
 pub type StaticElement = ContentTypes<()>;
 
@@ -125,12 +131,10 @@ where
     TKey: Into<String>,
     TValue: Into<String>,
 {
-    AttributeTypes::Attribute(
-        Attribute {
-            key: key.into(),
-            value: value.into(),
-        }
-    )
+    AttributeTypes::Attribute(Attribute {
+        key: key.into(),
+        value: value.into(),
+    })
 }
 
 pub fn class<TEvents, TClassName>(class_name: TClassName) -> AttributeTypes<TEvents>
@@ -143,12 +147,10 @@ where
     //     key: "class".to_string(),
     //     value: class_name.into(),
     // }
-    AttributeTypes::Attribute(
-        Attribute {
-            key: "class".to_string(),
-            value: class_name.into(),
-        }
-    )
+    AttributeTypes::Attribute(Attribute {
+        key: "class".to_owned(),
+        value: class_name.into(),
+    })
 }
 
 pub fn comment<TEvents, T>(value: T) -> ContentTypes<TEvents>
@@ -167,11 +169,60 @@ where
     ContentTypes::text(value)
 }
 
-#[macro_export]
-macro_rules! on_click {
-    ($command: expr) => {
-        AttributeTypes::Event(EventTypes::OnClick, $command)
+#[allow(unused)]
+macro_rules! class_expand {
+    ((), ($($arg:expr),*)) => {{
+        [$($arg),*]
+    }};
+
+    (($next:expr, $($rest:expr,)*), ($($arg:expr),*)) => {{
+        let class: &str = $next;
+        class_expand!(($($rest,)*), ($($arg,)* class))
+    }};
+}
+
+#[allow(unused)]
+macro_rules! class {
+    ($($class:expr),*) => { class_expand!(($($class,)*), ()) }
+}
+
+// TODO: Attributes as a hashset
+
+macro_rules! element_kind {
+    ($kind: ident) => {
+        pub fn $kind<TEvents>(
+            attributes: &[AttributeTypes<TEvents>],
+            children: &[ContentTypes<TEvents>],
+        ) -> ContentTypes<TEvents>
+        where
+            TEvents: Clone + Eq + Hash + PartialEq,
+        {
+            ContentTypes::<TEvents>::element(stringify!($kind), attributes, children)
+        }
     };
+}
+
+element_kind!(button);
+element_kind!(div);
+element_kind!(span);
+
+// #[macro_export]
+// macro_rules! on_click {
+//     ($command: expr) => {
+//         AttributeTypes::Event(EventTypes::OnClick, $command)
+//     };
+// }
+
+pub fn on_click<TEvents>(event: TEvents) -> AttributeTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+{
+    AttributeTypes::Event(
+        Event {
+            event_type: EventTypes::OnClick,
+            data: event
+        }
+    )
 }
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
@@ -180,63 +231,44 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     s.finish()
 }
 
-macro_rules! attributes_expand {
-    ($($attributes:expr),*) => {{
-        $($attributes),*
-    }};
-}
-
-macro_rules! children_expand {
-    ($($children:expr),*) => {{
-        $($children),*
-    }};
-}
-
-macro_rules! element_kind {
-    ($kind:ident) => {
-        fn $kind(attributes: &[&str], children: &[&str]) -> () {
-            println!("args[{0:?}]: {1:?} / {2:?}", stringify!($kind), attributes, children);
-        }
-        macro_rules! $kind {
-            ($attributes:tt$children:tt) => {
-                element_kind!(@kind $kind [$attributes][$children])
-            }
-        }
-    };
-    (@kind $kind:ident [$($attributes:expr),*][$($children:expr),*]) => {
-        let attributes = attributes_expand!($($attributes),*);
-        println!("attributes: {0:?}", attributes);
-        let children = children_expand!($($children),*);
-        println!("children: {0:?}", children);
-        $kind(&attributes, &children);
-    }
-
-}
-
-element_kind!(button);
-element_kind!(div);
-element_kind!(span);
-
 pub trait Component<TEvents>
 where
-    Self: Clone + Default + std::fmt::Debug,
+    Self: Clone + Default + Eq + Hash + PartialEq + std::fmt::Debug,
+    TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+{
+    fn diff(&self, prev: ContentTypes<TEvents>) -> Option<PatchTypes<TEvents>>;
+    // fn render(&self) -> ContentTypes<TEvents>;
+    // fn handle(&mut self, action: TEvents);
+}
+
+pub trait IFragment<TEvents>
+where
+    Self: Default,
     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
 {
     fn render(&self) -> ContentTypes<TEvents>;
-    fn handle(&mut self, action: TEvents);
 }
 
-macro_rules! attr {
-    ($key: ident, $value: ident) => {
-        let value: &str = &format!("{0:?}={1:?}", stringify!($key), stringify!($value));
-        value
-    }
+pub trait IInitializable
+where
+    Self: Clone + Default,
+{
+    fn init<F>(map: F) -> Self
+    where
+        F: Fn(&mut Self) -> ();
 }
 
-macro_rules! text {
-    ($value: ident) => {
-        let value: &str = &stringify!($value);
-        value
+impl <TModel> IInitializable for TModel
+where
+    TModel: Clone + Default,
+{
+    fn init<F>(update: F) -> Self
+    where
+        F: Fn(&mut Self) -> (),
+    {
+        let model: &mut TModel = &mut Self::default();
+        update(model);
+        model.to_owned()
     }
 }
 
@@ -244,32 +276,72 @@ macro_rules! text {
 mod tests {
     use super::*;
 
-    
+    #[derive(Clone, Debug, Hash, Eq, PartialEq)]
+    pub struct Button {
+        text: &'static str,
+    }
+
+    #[derive(Clone, Debug, Hash, Eq, PartialEq)]
+    pub enum ButtonEvents {
+        Clicked
+    }
+
+    impl Default for Button {
+        fn default() -> Self {
+            Button {
+                text: "Click Me",
+            }
+        }
+    }
+
+    impl IFragment<ButtonEvents> for Button {
+        fn render(&self) -> ContentTypes<ButtonEvents> {
+            button(
+                &[ on_click(ButtonEvents::Clicked),
+                ],
+                &[ text(self.text),
+                ],
+            )
+        }
+    }
+
+    pub struct Model {
+        main_button_text: &'static str,
+    }
+
+    #[derive(Clone, Debug, Hash, Eq, PartialEq)]
+    pub enum Events {
+        MainButton (ButtonEvents)
+    }
+
+    #[test]
+    fn temp() {
+        let elem: ContentTypes<ButtonEvents> =
+            div(
+                &[
+
+                ],
+                &[  Button::init(|m| {
+                        m.text = "Do Something";
+                    }).render()
+
+                ]);
+
+        println!("{0:?}", elem);
+        // elem.render(())
+        assert!(false);
+    }
 
     #[test]
     fn static_elem() {
-        let elem = div!([""][""]);
-            // div!(
-            //     [ class!["asdf"]
-            //     , attr!["key", "abcd"]
-            //     ]
-            //     // [ span!(
-            //     //     []
-            //     //     [ text!("fdsa")
-            //     //     ])
-            //     [ text!("text")
-            //     , text!("dbca")
-            //     ]);
+        // text("text")
 
-        // elem.diff(None)
+        println!("class: {:?}", class!("blue"));
+        println!("class: {:?}", class!("blue", "green"));
+        println!("class: {:?}", class!("blue", "value"));
+        println!("class: {:?}", class!("blue", "value", "value", "black"));
 
-        // println!("class: {:?}", class!("blue"));
-        // println!("class: {:?}", class!("blue", "green"));
-        // println!("class: {:?}", class!("blue", value, data3("asdfs".to_owned())));
-        // // println!("class: {:?}", class!(10, 10, 10));
-        // println!("class: {:?}", class!("blue", value, value, "black"));
-
-        assert!(false);
+        assert!(true);
     }
 
     #[test]
@@ -291,41 +363,41 @@ mod tests {
         assert!(base != diff_value);
     }
 
-    // #[test]
-    // fn should_hash_elements() {
-    //     let base_node: StaticElement = div(&[], &[]);
-    //     let base = calculate_hash(&base_node);
-    //     assert_eq!(base, base);
+    #[test]
+    fn should_hash_elements() {
+        let base_node: StaticElement = div(&[], &[]);
+        let base = calculate_hash(&base_node);
+        assert_eq!(base, base);
 
-    //     let same_node: StaticElement = div(&[], &[]);
-    //     let same = calculate_hash(&same_node);
-    //     assert_eq!(base, same);
-        
-    //     let span_node: StaticElement = span(&[], &[]);
-    //     let span = calculate_hash(&span_node);
-    //     assert!(base != span);
-    // }
+        let same_node: StaticElement = div(&[], &[]);
+        let same = calculate_hash(&same_node);
+        assert_eq!(base, same);
 
-    // #[test]
-    // fn should_build_vdom_tree() {
-    //     let view: StaticElement = div(&[], &[text(format!("{:}", 10))]);
+        let span_node: StaticElement = span(&[], &[]);
+        let span = calculate_hash(&span_node);
+        assert!(base != span);
+    }
 
-    //     match view {
-    //         ContentTypes::Element(e) => {
-    //             assert_eq!(e.kind, "div");
-    //             assert_eq!(e.attributes.len(), 0);
-    //             assert_eq!(e.children.len(), 1);
+    #[test]
+    fn should_build_vdom_tree() {
+        let view: StaticElement = div(&[], &[text(format!("{:}", 10))]);
 
-    //             match e.children[0] {
-    //                 ContentTypes::Text(ref text) => {
-    //                     assert_eq!(text, "10");
-    //                 }
-    //                 _ => assert!(false),
-    //             }
-    //         }
-    //         _ => assert!(false),
-    //     }
-    // }
+        match view {
+            ContentTypes::Element(e) => {
+                assert_eq!(e.kind, "div");
+                assert_eq!(e.attributes.len(), 0);
+                assert_eq!(e.children.len(), 1);
+
+                match e.children[0] {
+                    ContentTypes::Text(ref text) => {
+                        assert_eq!(text, "10");
+                    }
+                    _ => assert!(false),
+                }
+            }
+            _ => assert!(false),
+        }
+    }
 
     // #[test]
     // fn should_diff_text_elements() {
@@ -499,25 +571,6 @@ mod tests {
 //     }
 // }
 
-
-// macro_rules! class_expand {
-//     ((), ($($arg:expr),*)) => {{
-//         [$($arg),*]
-//     }};
-
-//     (($next:expr, $($rest:expr,)*), ($($arg:expr),*)) => {{
-//         let class: &str = $next;
-//         class_expand!(($($rest,)*), ($($arg,)* class))
-//     }};
-// }
-
-// macro_rules! class {
-//     ($($class:expr),*) => { class_expand!(($($class,)*), ()) }
-// }
-
-// // TODO: Attributes as a hashset
-
-
 // macro_rules! attribute_expand {
 //     ((), ($($arg:expr),*)) => {{
 //         ([$($arg),*])
@@ -560,19 +613,7 @@ mod tests {
 
 // blah!(["stuff"], ["asdf"]);
 
-// macro_rules! element_kind_fn {
-//     ($kind: ident) => {
-//         pub fn $kind<TEvents>(
-//             attributes: &[AttributeTypes<TEvents>],
-//             children: &[ContentTypes<TEvents>],
-//         ) -> ContentTypes<TEvents>
-//         where
-//             TEvents: Clone + Eq + Hash + PartialEq,
-//         {
-//             ContentTypes::<TEvents>::element(stringify!($kind), attributes, children)
-//         }
-//     };
-// }
+
 
 // element_kind_fn!(div);
 // element_kind_fn!(span);
@@ -598,7 +639,6 @@ mod tests {
 //     AddHandler(HandlerTypes, ActionTarget<TEvents>),
 //     Update(Vec<PatchTypes<TEvents>>),
 // }
-
 
 // fn s_element(kind: &'static str, attributes: &[&'static str], children: &[&'static str]) {
 //     println!("Element: {:?}", kind);

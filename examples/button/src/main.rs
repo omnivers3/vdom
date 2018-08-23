@@ -25,18 +25,16 @@ pub enum Events {
 impl Component<Events> for Model {
     fn render(&self) -> NodeTypes<Events> {
         div(
-            &[ class("special")
+            &[  class("special")
             ],
-            &[
-                span(&[], &[text(format!("{:}", self.count))]),
+            &[  span(&[], &[text(format!("{:}", self.count))]),
                 button(
                     &[ on_click!(
                             // TODO: add event tag for ident here in macro to enable event data extraction within this macro invokation?
                             Events::DoSomethingClicked(self.count)
                         )
                     ],
-                    &[
-                        text("Do Something"),
+                    &[ text("Do Something"),
                     ],
                 ),
             ],
