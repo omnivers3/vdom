@@ -3,7 +3,7 @@ extern crate serde_derive;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
+// use std::ops::Deref;
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Attribute {
@@ -70,58 +70,28 @@ where
 {
     Comment(String),
     Element(Element<TEvents>),
-    // Fragment(&'static Fragment<TEvents>),
-    // Fragment(Element<TEvents>),
+    List(Vec<ContentTypes<TEvents>>),
     Text(String),
-    // Handler(HandlerTypes, ActionTarget<TEvents>),
 }
 
-impl<TEvents> ContentTypes<TEvents>
-where
-    TEvents: Clone + Eq + Hash + PartialEq,
-{
-    pub fn comment<T>(value: T) -> Self
-    where
-        T: Into<String>,
-    {
-        ContentTypes::Comment(value.into())
-    }
+// impl <TEvents> ContentTypes<TEvents>
+// where
+//     TEvents: Clone + Eq + Hash + PartialEq,
+// {
+//     fn bind<TTargetEvents, FMap>(self, map: FMap) -> ContentTypes<TEvents>
+//     where
+//         TTargetEvents: Clone + Eq + Hash + PartialEq,
+//         FMap: Fn(TEvents) -> TTargetEvents,
+//     {
+//         map()
+//     }
+// }
 
-    /// Makes an instance of a Virtual Element with properties set to provided values
-    pub fn element<TKind, TAttributes, TChildren>(
-        kind: TKind,
-        attributes: TAttributes,
-        children: TChildren,
-    ) -> Self
-    where
-        TKind: Into<String>,
-        TAttributes: Deref<Target = [AttributeTypes<TEvents>]>,
-        TChildren: Deref<Target = [ContentTypes<TEvents>]>,
-    {
-        let kind_: String = kind.into();
-        let attributes_: Vec<AttributeTypes<TEvents>> = attributes.deref().to_vec();
-        let children_: Vec<ContentTypes<TEvents>> = children.deref().to_vec();
-        ContentTypes::Element(Element {
-            kind: kind_,
-            attributes: attributes_,
-            children: children_,
-        })
-    }
+// pub type StaticAttribute = AttributeTypes<()>;
+// pub type StaticElement = ContentTypes<()>;
 
-    pub fn text<T>(value: T) -> Self
-    where
-        T: Into<String>,
-    {
-        ContentTypes::Text(value.into())
-    }
-}
-
-pub enum PatchTypes<TEvents> {
-    Event(TEvents),
-}
-
-pub type StaticAttribute = AttributeTypes<()>;
-pub type StaticElement = ContentTypes<()>;
+pub type StaticAttribute = FnAttributeBuilder<()>;
+pub type StaticElement = FnContentBuilder<()>;
 
 pub type RenderResult<TEvents> = Option<ContentTypes<TEvents>>;
 
@@ -142,11 +112,6 @@ where
     TEvents: Clone + Eq + Hash + PartialEq,
     TClassName: Into<String>,
 {
-    // AttributeTypes::Attribute("class".to_owned(), class_name.into())
-    // Attribute {
-    //     key: "class".to_string(),
-    //     value: class_name.into(),
-    // }
     AttributeTypes::Attribute(Attribute {
         key: "class".to_owned(),
         value: class_name.into(),
@@ -158,7 +123,7 @@ where
     TEvents: Clone + Eq + Hash + PartialEq,
     T: Into<String>,
 {
-    ContentTypes::comment(value)
+    ContentTypes::Comment(value.into())
 }
 
 pub fn text<TEvents, T>(value: T) -> ContentTypes<TEvents>
@@ -166,7 +131,14 @@ where
     TEvents: Clone + Eq + Hash + PartialEq,
     T: Into<String>,
 {
-    ContentTypes::text(value)
+    ContentTypes::Text(value.into())
+}
+
+pub fn list<TEvents>(children: &[ContentTypes<TEvents>]) -> ContentTypes<TEvents>
+where
+    TEvents: Clone + Eq + Hash + PartialEq,
+{
+    ContentTypes::List(children.to_vec())
 }
 
 #[allow(unused)]
@@ -186,18 +158,41 @@ macro_rules! class {
     ($($class:expr),*) => { class_expand!(($($class,)*), ()) }
 }
 
-// TODO: Attributes as a hashset
+// TODO: Attributes as a hashset?
+
+pub type FnAttributeBuilder<TEvents>
+    where TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+    = fn(IBuildContext<TEvents>) -> AttributeTypes<TEvents>;
+
+pub type FnContentBuilder<TEvents>
+    where TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+    = fn(IBuildContext<TEvents>) -> ContentTypes<TEvents>;
+
+pub trait IBuildContext<TEvents>
+where
+    Self: Sized,
+    TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug
+{
+    fn element(&self, kind: &str, attributes: &[FnAttributeBuilder<TEvents>], children: &[FnContentBuilder<TEvents>]) -> ContentTypes<TEvents>;
+}
 
 macro_rules! element_kind {
     ($kind: ident) => {
         pub fn $kind<TEvents>(
-            attributes: &[AttributeTypes<TEvents>],
-            children: &[ContentTypes<TEvents>],
-        ) -> ContentTypes<TEvents>
+            attributes: &[FnAttributeBuilder<TEvents>],
+            children: &[FnContentBuilder<TEvents>],
+        ) -> FnContentBuilder<TEvents>
         where
             TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
         {
-            ContentTypes::<TEvents>::element(stringify!($kind), attributes, children)
+            &| ctx: &IBuildContext<TEvents> | {
+                ctx.element(stringify!(kind), attributes, children)
+            }
+            // ContentTypes::Element(Element {
+            //     kind: stringify!($kind).to_owned(),
+            //     attributes: attributes.to_vec(),
+            //     children: children.to_vec(),
+            // })
         }
     };
 }
@@ -205,33 +200,6 @@ macro_rules! element_kind {
 element_kind!(button);
 element_kind!(div);
 element_kind!(span);
-
-// #[macro_export]
-// macro_rules! on_click {
-//     ($command: expr) => {
-//         AttributeTypes::Event(EventTypes::OnClick, $command)
-//     };
-// }
-
-// macro_rules! fragment {
-//     ($alias: ident, $type: ty) => {
-//         macro_rules! $alias {
-//             ($expr: expr) => {{
-//                 $type::props(|props| $expr)
-//             }};
-//         }
-//         // pub fn $alias<TEvents>(
-
-//         // ) -> ContentTypes<TEvents>
-//         // where
-//         //     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
-//         // {
-//         //     $type::props(|m| {
-
-//         //     })
-//         // }
-//     }
-// }
 
 pub fn on_click<TEvents>(event: TEvents) -> AttributeTypes<TEvents>
 where
@@ -249,22 +217,22 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     s.finish()
 }
 
-pub trait IComponent<TEvents>
-where
-    Self: Clone + Default + Eq + Hash + PartialEq + std::fmt::Debug,
-    TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
-{
-    // fn diff(&self, prev: ContentTypes<TEvents>) -> Option<PatchTypes<TEvents>>;
-    // fn render(&self) -> ContentTypes<TEvents>;
-    // fn handle(&mut self, action: TEvents);
-}
+// pub trait IComponent<TEvents>
+// where
+//     Self: Clone + Default + Eq + Hash + PartialEq + std::fmt::Debug,
+//     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+// {
+//     // fn diff(&self, prev: ContentTypes<TEvents>) -> Option<PatchTypes<TEvents>>;
+//     // fn render(&self) -> ContentTypes<TEvents>;
+//     // fn handle(&mut self, action: TEvents);
+// }
 
-pub struct Component<TEvents>
-where
-    TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
-{
-    content: ContentTypes<TEvents>,
-}
+// pub struct Component<TEvents>
+// where
+//     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+// {
+//     content: ContentTypes<TEvents>,
+// }
 
 // pub trait IComponentProps<TEvents>
 // where
@@ -276,7 +244,7 @@ where
 //         F: Fn(&mut Self)
 // }
 
-pub trait IFragment<TEvents>
+pub trait IComponent<TEvents>
 where
     Self: Default,
     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
@@ -284,30 +252,33 @@ where
     fn render(&self) -> ContentTypes<TEvents>;
 }
 
-pub trait IFragmentProps<TEvents>
+pub trait IComponentModel<TEvents>
 where
-    Self: Clone + Default + IFragment<TEvents>,
+    Self: Clone + Default + IComponent<TEvents>,
     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
 {
-    fn props<F>(map: F) -> ContentTypes<TEvents>
+    fn props<F>(&self, map: F) -> ContentTypes<TEvents>
     where
         F: Fn(&mut Self) -> ();
 }
 
-impl<TProps, TEvents> IFragmentProps<TEvents> for TProps
+impl<TModel, TEvents> IComponentModel<TEvents> for TModel
 where
-    TProps: Clone + Default + IFragment<TEvents>,
+    TModel: Clone + Default + IComponent<TEvents>,
     TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
 {
-    fn props<F>(update: F) -> ContentTypes<TEvents>
+    fn props<F>(&self, update: F) -> ContentTypes<TEvents>
     where
         F: Fn(&mut Self) -> (),
     {
-        let model: &mut TProps = &mut Self::default();
+        let model: &mut TModel = &mut Self::default();
         update(model);
         model.render()
-        // model.to_owned()
     }
+}
+
+pub enum PatchTypes<TEvents> {
+    Event(TEvents),
 }
 
 #[cfg(test)]
@@ -330,7 +301,7 @@ mod tests {
         }
     }
 
-    impl IFragment<ButtonEvents> for Button {
+    impl IComponent<ButtonEvents> for Button {
         fn render(&self) -> ContentTypes<ButtonEvents> {
             button(&[on_click(ButtonEvents::Clicked)], &[text(self.text)])
         }
@@ -338,12 +309,8 @@ mod tests {
 
     #[derive(Clone, Debug, Hash, Eq, PartialEq)]
     pub struct ListView<TItemType> {
-        items: Vec<TItemType>,
-    }
-
-    #[derive(Clone, Debug, Hash, Eq, PartialEq)]
-    pub struct ListViewProps {
         max_items: Option<u64>,
+        items: Vec<TItemType>,
     }
 
     #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -353,43 +320,72 @@ mod tests {
 
     impl <TItemType> Default for ListView<TItemType> {
         fn default() -> Self {
-            ListView { items: vec![] }
+            ListView {
+                max_items: None,
+                items: vec![],
+            }
         }
     }
 
-    impl Default for ListViewProps {
-        fn default() -> Self {
-            ListViewProps { max_items: None }
-        }
-    }
+    // impl IComponent<ListViewEvents> for ListView<String> {
+    //     fn render<TEvents>(&self, events: impl IEventBinding) -> ContentTypes<TEvents>
+    //     where
+    //         TEvents: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+    //     {
+    //         let (_, items) = self.items.into_iter().fold((0, vec![]), |(i, list), item| {
+    //             i = i + 1;
+    //             let item =
+    //                 div(
+    //                     &[on_click(ListViewEvents::ItemClicked(i))
+    //                     ],
+    //                     &[ text(item)
+    //                     ]);
+    //             list.push(item);
+    //             (i, list)
+    //         });
+    //         list(&items)
+    //     }
+    // }
 
     pub struct Model {
-        main_button_text: &'static str,
+        list_view: ListView<String>,
+        main_button: Button,
     }
 
     #[derive(Clone, Debug, Hash, Eq, PartialEq)]
     pub enum Events {
+        ListView(ListViewEvents),
         MainButton(ButtonEvents),
     }
 
     #[test]
     fn temp() {
-        let elem: ContentTypes<ButtonEvents> = div(
+        let model = Model {
+            list_view: ListView::default(),
+            main_button: Button::default(),
+        };
+
+        let elem: ContentTypes<Events> = div(
             &[],
-            &[Button::props(|props| {
-                props.text = "Do Something";
-            })],
+            // &[  model.list_view.render(),
+            //     model.main_button.props(|m| {
+            //         m.text = "Done It"
+            //     }),
+            //     model.main_button.render()
+            // ],
         );
+        let elem = list(&[
+            elem.to_owned(),
+            elem.to_owned(),
+        ]);
 
         println!("{0:?}", elem);
-        // elem.render(())
+
         assert!(false);
     }
 
     #[test]
     fn static_elem() {
-        // text("text")
-
         println!("class: {:?}", class!("blue"));
         println!("class: {:?}", class!("blue", "green"));
         println!("class: {:?}", class!("blue", "value"));
