@@ -7,12 +7,12 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 /// Define the expected global trait set for events
-pub trait IEvent: Clone + Eq + Hash + PartialEq + std::fmt::Debug {}
+pub trait IEvent: Eq + Hash + PartialEq + std::fmt::Debug {}
 
 /// Auto-implement IEvent for types which share the required traits
 impl<TTarget> IEvent for TTarget
 where
-    TTarget: Clone + Eq + Hash + PartialEq + std::fmt::Debug,
+    TTarget: Eq + Hash + PartialEq + std::fmt::Debug,
 {}
 
 pub trait IAttributeProps: Eq + Hash + PartialEq + std::fmt::Debug {}
@@ -22,7 +22,9 @@ where
     TTarget: Eq + Hash + PartialEq + std::fmt::Debug,
 {}
 
-pub trait IAttribute: std::fmt::Debug {}
+pub trait IAttribute {}
+
+// impl IAttributeProps for Box<IAttribute> {}
 
 pub trait IElementProps: Eq + Hash + PartialEq + std::fmt::Debug {}
 
@@ -31,7 +33,9 @@ where
     TTarget: Eq + Hash + PartialEq + std::fmt::Debug,
 {}
 
-pub trait IElement {
+pub trait IElement {}
+
+pub trait IElementKind {
     fn kind(&self) -> String;
 }
 
@@ -66,10 +70,16 @@ pub struct Element<TAttributes, TChildren> {
     pub children: Vec<TChildren>,
 }
 
+impl<TAttributes, TChildren> IElement for Element<TAttributes, TChildren>
+// where
+//     TAttributes: IAttributeProps,
+//     TChildren: IElementProps,
+{}
+
 impl<TAttributes, TChildren> Element<TAttributes, TChildren>
-where
-    TAttributes: IAttributeProps,
-    TChildren: IElementProps,
+// where
+//     TAttributes: IAttributeProps,
+//     TChildren: IElementProps,
 {
     // pub fn new(kind: String, attributes: &[TAttributes], children: &[TChildren]) -> Element<TAttributes, TChildren> {
     //     Element {
@@ -99,7 +109,7 @@ where
 //     }
 // }
 
-impl<TAttributes, TChildren> IElement for Element<TAttributes, TChildren>
+impl<TAttributes, TChildren> IElementKind for Element<TAttributes, TChildren>
 where
     TAttributes: IAttributeProps,
     TChildren: IElementProps,
@@ -151,6 +161,8 @@ pub enum HtmlElements {
     Body (BodyElements),
 }
 
+impl IElement for HtmlElements {}
+
 // pub type HtmlElement = Box<IElement<TAttributes=IHtmlAttribute, TChildren=IHtmlElement>>;
 
 // pub fn html<TAttributes, TChildren>(attributes: &[TAttributes], children: &[TChildren]) -> Element<TAttributes, TChildren>
@@ -197,8 +209,17 @@ impl From<HtmlAttributes> for Box<IAttribute> {
     }
 }
 
-pub fn html(attributes: &[HtmlAttributes]) -> Vec<Box<IAttribute>> {
-    attributes.into_iter().map(|item| item.to_owned().into()).collect()
+impl From<HtmlElements> for Box<IElement> {
+    fn from(children: HtmlElements) -> Box<IElement> {
+        Box::new(children)
+    }
+}
+
+// pub fn html(attributes: &[HtmlAttributes], children: &[HtmlElements]) -> Vec<Box<IAttribute>> {
+pub fn html(attributes: &[HtmlAttributes], children: &[HtmlElements]) -> Box<IElement> {
+    let attributes: Vec<Box<IAttribute>> = attributes.into_iter().map(|item| item.to_owned().into()).collect();
+    let children: Vec<Box<IElement>> = children.into_iter().map(|item| item.to_owned().into()).collect();
+    Box::new(Element::new(HTML_KIND.to_owned(), attributes, children))
 }
 
 // pub fn html(attributes: &[HtmlAttributes], children: &[HtmlElements]) -> Element<HtmlAttributes, HtmlElements> {
@@ -308,9 +329,9 @@ mod tests {
         // ], &[]);
         let element = html(&[
             Attribute { key: "blah".to_owned(), value: "bhel".to_owned() }.into(),
-        ]);
+        ], &[]);
 
-        println!("{0:?}", element);
+        // println!("{:?}", element);
         assert!(false);
     }
 }
