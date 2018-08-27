@@ -11,18 +11,18 @@ pub struct Element<TAttribute> {
 }
 
 #[derive(Debug)]
-pub struct Html<TAttribute>(Element<TAttribute>);
+pub struct Html<'a>(Element<&'a IHtmlAttribute>);
 
 pub trait IHtmlAttribute: std::fmt::Debug {}
 
 impl<'a> IHtmlAttribute for &'a IHtmlAttribute {}
 
-impl<TAttribute> IElement for Html<TAttribute>
-where
-    TAttribute: IHtmlAttribute + Clone,
-{
-    type TAttributes = TAttribute;
-}
+// impl<'a, T> IElement for Html<'a>
+// where
+//     T: IHtmlAttribute + Clone,
+// {
+//     type TAttributes = T;
+// }
 
 #[derive(Clone, Debug)]
 pub struct Foo {}
@@ -34,12 +34,10 @@ impl IHtmlAttribute for Foo {}
 
 impl IHtmlAttribute for Bar {}
 
-pub fn html<TAttribute>(attributes: &[TAttribute]) -> Html<TAttribute>
-where
-    TAttribute: IHtmlAttribute + Clone + std::fmt::Debug,
+pub fn html<'a, 'b: 'a>(attributes: &'b [&IHtmlAttribute]) -> Html<'b>
 {
-    Html::<TAttribute>(
-        Element::<TAttribute>{
+    Html(
+        Element::<&IHtmlAttribute>{
             kind: "html".to_owned(),
             attributes: attributes.to_vec(),
         }
@@ -52,10 +50,7 @@ mod tests {
 
     #[test]
     fn should() {
-        let attr1: &IHtmlAttribute = &Foo {};
-        let attr2: &IHtmlAttribute = &Bar {};
-
-        let element = html(&[attr1, attr2]);
+        let element = html(&[&Foo {}, &Bar {}]);
 
         println!("{:?}", element);
 
