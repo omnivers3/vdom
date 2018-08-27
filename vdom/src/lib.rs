@@ -22,9 +22,9 @@ where
     TTarget: Eq + Hash + PartialEq + std::fmt::Debug,
 {}
 
-pub trait IAttribute {}
+pub trait IAttribute: std::fmt::Debug {}
 
-// impl IAttributeProps for Box<IAttribute> {}
+impl IAttribute for Box<IAttribute> {}
 
 pub trait IElementProps: Eq + Hash + PartialEq + std::fmt::Debug {}
 
@@ -33,26 +33,13 @@ where
     TTarget: Eq + Hash + PartialEq + std::fmt::Debug,
 {}
 
-pub trait IElement {}
+pub trait IElement: std::fmt::Debug {}
+
+impl IElement for Box<IElement> {}
 
 pub trait IElementKind {
     fn kind(&self) -> String;
 }
-
-// pub trait IElement: Clone {
-//     type TAttributes: Clone + IAttribute;
-//     type TChildren: Clone + IElement;
-
-//     fn kind(&self) -> String;
-
-//     fn new(kind: String, attributes: &[Self::TAttributes], children: &[Self::TChildren]) -> Element<Self::TAttributes, Self::TChildren> {
-//         Element {
-//             kind,
-//             attributes: attributes.to_vec(),
-//             children: children.to_vec(),
-//         }
-//     }
-// }
 
 pub trait IAttributeContainer<TAttributes> {
     fn attributes(self) -> Vec<TAttributes>;
@@ -62,7 +49,6 @@ pub trait IElementContainer<TChildren> {
     fn children(self) -> Vec<TChildren>;
 }
 
-// #[derive(Clone)]
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Element<TAttributes, TChildren> {
     pub kind: String,
@@ -71,23 +57,12 @@ pub struct Element<TAttributes, TChildren> {
 }
 
 impl<TAttributes, TChildren> IElement for Element<TAttributes, TChildren>
-// where
-//     TAttributes: IAttributeProps,
-//     TChildren: IElementProps,
+where
+    TAttributes: IAttribute,
+    TChildren: IElement,
 {}
 
-impl<TAttributes, TChildren> Element<TAttributes, TChildren>
-// where
-//     TAttributes: IAttributeProps,
-//     TChildren: IElementProps,
-{
-    // pub fn new(kind: String, attributes: &[TAttributes], children: &[TChildren]) -> Element<TAttributes, TChildren> {
-    //     Element {
-    //         kind,
-    //         attributes: attributes.to_vec(),
-    //         children: children.to_vec(),
-    //     }
-    // }
+impl<TAttributes, TChildren> Element<TAttributes, TChildren> {
     pub fn new(kind: String, attributes: Vec<TAttributes>, children: Vec<TChildren>) -> Element<TAttributes, TChildren> {
         Element {
             kind,
@@ -96,18 +71,6 @@ impl<TAttributes, TChildren> Element<TAttributes, TChildren>
         }
     }
 }
-// impl<TAttributes, TChildren> IElement for Element<TAttributes, TChildren>
-// where
-//     TAttributes: IAttribute,
-//     TChildren: IElement,
-// {
-//     type TAttributes = TAttributes;
-//     type TChildren = TChildren;
-
-//     fn kind(&self) -> String {
-//         self.kind.to_owned()
-//     }
-// }
 
 impl<TAttributes, TChildren> IElementKind for Element<TAttributes, TChildren>
 where
@@ -139,110 +102,98 @@ where
     }
 }
 
-// pub trait IHtmlAttribute {}
-
-// impl <T> IAttribute for T where T: Clone + IHtmlAttribute {}
-
-// pub trait IHtmlElement {}
-
 pub const HTML_KIND: &str = "html";
 pub const BODY_KIND: &str = "body";
+pub const DIV_KIND: &str = "div";
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum HtmlAttributes {
+pub enum RootAttributes {
     Attribute (Attribute),
     Language (String),
 }
 
-impl IAttribute for HtmlAttributes {}
+impl IAttribute for RootAttributes {}
+impl<'a> IAttribute for &'a RootAttributes {}
 
-#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum HtmlElements {
-    Body (BodyElements),
+impl<'a> From<&'a RootAttributes> for Box<IAttribute> {
+    fn from(attributes: &'a RootAttributes) -> Box<IAttribute> {
+        Box::new(attributes.to_owned())
+    }
 }
 
-impl IElement for HtmlElements {}
-
-// pub type HtmlElement = Box<IElement<TAttributes=IHtmlAttribute, TChildren=IHtmlElement>>;
-
-// pub fn html<TAttributes, TChildren>(attributes: &[TAttributes], children: &[TChildren]) -> Element<TAttributes, TChildren>
-// where
-//     TAttributes: IHtmlAttribute,
-//     TChildren: IHtmlElement,
-// {
-//     Element::new(HTML_KIND.to_owned(), attributes, children)
-// }
-
-// pub fn html<TAttributes, TChildren>(attributes: &[TAttributes], children: &[TChildren]) -> Element<TAttributes, TChildren>
-// where
-//     TAttributes: IHtmlAttribute,
-//     TChildren: IHtmlElement,
-// {
-//     Element::new(HTML_KIND.to_owned(), attributes, children)
-// }
-
-// pub fn html(attributes: &[HtmlAttributes], children: &[HtmlElements]) -> Element<HtmlAttributes, HtmlElements> {
-//     Element::new(HTML_KIND.to_owned(), attributes, &[])
-// }
-
-// pub fn element<TKind, TDerefAttributes, TAttributes, TDerefChildren, TChildren>(
-//     kind: TKind,
-//     attributes: TDerefAttributes,
-//     children: TDerefChildren
-// ) -> Element<TAttributes, TChildren>
-// where
-//     TKind: Into<String>,
-//     TDerefAttributes: Deref<Target=[TAttributes]>,
-//     TAttributes: IAttributeProps,
-//     TDerefChildren: Deref<Target=[TChildren]>,
-//     TChildren: IElementProps,
-// {
-//     let kind: String = kind.into();
-//     let attributes: Vec<TAttributes> = attributes.deref().to_vec();
-//     let children: Vec<TChildren> = children.deref().to_vec();
-//     Element::new(kind, attributes, children)
-// }
-
-impl From<HtmlAttributes> for Box<IAttribute> {
-    fn from(attribute: HtmlAttributes) -> Box<IAttribute> {
+impl From<RootAttributes> for Box<IAttribute> {
+    fn from(attribute: RootAttributes) -> Box<IAttribute> {
         Box::new(attribute)
     }
 }
 
-impl From<HtmlElements> for Box<IElement> {
-    fn from(children: HtmlElements) -> Box<IElement> {
+pub type Html = Element<RootAttributes, RootElements>;
+
+// pub trait IHtml {}
+
+// impl IHtml for Html {}
+
+pub type Body = Element<BodyAttributes, BodyElements>;
+
+// pub trait IBody {}
+
+// impl IBody for Body {}
+
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum RootElements {
+    Body (Body),
+}
+
+pub trait IRootElements: std::fmt::Debug {}
+
+impl IElement for RootElements {}
+
+impl<'a> IElement for &'a RootElements {}
+
+impl IRootElements for RootElements {}
+
+impl<'a> From<&'a RootElements> for Box<IElement> {
+    fn from(children: &'a RootElements) -> Box<IElement> {
+        Box::new(children.to_owned())
+    }
+}
+
+impl<'a> From<RootElements> for Box<IElement> {
+    fn from(children: RootElements) -> Box<IElement> {
         Box::new(children)
     }
 }
 
-// pub fn html(attributes: &[HtmlAttributes], children: &[HtmlElements]) -> Vec<Box<IAttribute>> {
-pub fn html(attributes: &[HtmlAttributes], children: &[HtmlElements]) -> Box<IElement> {
-    let attributes: Vec<Box<IAttribute>> = attributes.into_iter().map(|item| item.to_owned().into()).collect();
-    let children: Vec<Box<IElement>> = children.into_iter().map(|item| item.to_owned().into()).collect();
-    Box::new(Element::new(HTML_KIND.to_owned(), attributes, children))
+impl From<Element<BodyAttributes, BodyElements>> for RootElements {
+    fn from(element: Element<BodyAttributes, BodyElements>) -> RootElements {
+        RootElements::Body(element)
+    }
+}
+pub fn html<TAttributes, TChildren>(attributes: &[TAttributes], children: &[TChildren]) -> Html
+where
+    TAttributes: Into<RootAttributes> + Clone,
+    TChildren: Into<RootElements> + Clone,
+    RootAttributes: From<TAttributes>,
+    RootElements: From<TChildren>,
+{
+    let attributes: Vec<RootAttributes> = attributes.into_iter().map(|item| (*item).to_owned().into()).collect();
+    let children: Vec<RootElements> = children.into_iter().map(|item| (*item).to_owned().into()).collect();
+    Element::new(HTML_KIND.to_owned(), attributes, children)
 }
 
-// pub fn html(attributes: &[HtmlAttributes], children: &[HtmlElements]) -> Element<HtmlAttributes, HtmlElements> {
-//     Element::new(HTML_KIND.to_owned(), attributes, &[])
-// }
+pub fn body<TAttributes, TChildren>(attributes: &[TAttributes], children: &[TChildren]) -> Body
+where
+    TAttributes: Into<BodyAttributes> + Clone,
+    TChildren: Into<BodyElements> + Clone,
+    BodyAttributes: From<TAttributes>,
+    BodyElements: From<TChildren>,
+{
+    let attributes: Vec<BodyAttributes> = attributes.into_iter().map(|item| (*item).to_owned().into()).collect();
+    let children: Vec<BodyElements> = children.into_iter().map(|item| (*item).to_owned().into()).collect();
+    Element::new(BODY_KIND.to_owned(), attributes, children)
+}
 
-// pub fn html<TAttributes, TChildren>(attributes: &[IHtmlAttribute], children: &[IHtmlElement]) -> HtmlElement
-// where
-//     TAttributes: IHtmlAttribute + Sized,
-//     TChildren: IHtmlElement + Sized,
-// pub fn html<TAttributes, TChildren>(attributes: &[TAttributes], children: &[TChildren]) -> HtmlElement
-// // where
-// //     TAttributes: IHtmlAttribute + ?Sized,
-// //     TChildren: IHtmlElement + ?Sized,
-// {
-//     Element::new(HTML_KIND.to_owned(), attributes, children)
-// }
 
-// pub trait IBodyAttribute {}
-
-// pub trait IBodyChild {}
-
-// pub type BodyElement = Element<IBodyAttribute, IBodyChild>;
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum BodyAttributes {
@@ -254,6 +205,19 @@ pub enum BodyElements {
 
 }
 
+pub trait IBodyElements {}
+
+impl IBodyElements for BodyElements {}
+
+impl IRootElements for BodyElements {}
+
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum HtmlElements {
+
+}
+
+impl IBodyElements for HtmlElements {}
+
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 /// A generic attribute which can contain user defined values ad-hoc
 pub struct Attribute {
@@ -261,23 +225,19 @@ pub struct Attribute {
     pub value: String,
 }
 
-impl From<Attribute> for HtmlAttributes {
-    fn from(source: Attribute) -> HtmlAttributes {
-        HtmlAttributes::Attribute(source)
+impl From<Attribute> for RootAttributes {
+    fn from(source: Attribute) -> RootAttributes {
+        RootAttributes::Attribute(source)
     }
 }
 
-// impl TryFrom<HtmlAttributes> for Attribute {
-//     fn try_from(source: HtmlAttributes) -> Result<Self, Errors> {
-//         match source {
-//             HtmlAttributes::Attribute (attribute) => attribute
-//         }
-//     }
-// }
+impl<'a> From<&'a Attribute> for RootAttributes {
+    fn from(source: &Attribute) -> RootAttributes {
+        RootAttributes::Attribute(source.to_owned())
+    }
+}
 
-// impl IAttribute for Attribute {}
-
-// impl IHtmlAttribute for Attribute {}
+// pub fn attribute(key: String, value: String) -> 
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum EventTypes {
@@ -324,17 +284,43 @@ mod tests {
 
     #[test]
     fn should() {
-        // let element = element("asdf", &[
-        //     Attribute { key: "blah".to_owned(), value: "bhel".to_owned() },
-        // ], &[]);
-        let element = html(&[
-            Attribute { key: "blah".to_owned(), value: "bhel".to_owned() }.into(),
-        ], &[]);
+        // let element: Element<Box<IAttribute>, Box<IElement>> = html(
+        let element = html(
+            &[  Attribute { key: "blah".to_owned(), value: "bhel".to_owned() }//.into(),
+            ],
+            &[  body(
+                &[],
+                &[  //body(&[], &[])
+                ])
+            ]
+        );
 
-        // println!("{:?}", element);
+        println!("{0:?}", element);
         assert!(false);
     }
 }
+
+
+// impl From<Element<RootAttributes, RootElements>> for Element<Box<IAttribute>, Box<IElement>> {
+//     fn from(element: Element<RootAttributes, RootElements>) -> Element<Box<IAttribute>, Box<IElement>> {
+//         // let attributes: Vec<Box<IAttribute>> = element.attributes.into_iter().map(|item| item.to_owned().into()).collect();
+//         let attributes: Vec<Box<IAttribute>> = element.attributes.into_iter().map(|item| item.into()).collect();
+//         // let children: Vec<Box<IElement>> = element.children.into_iter().map(|item| item.to_owned().into()).collect();
+//         let children: Vec<Box<IElement>> = element.children.into_iter().map(|item| item.into()).collect();
+//         Element::new(element.kind, attributes, children)
+//     }
+// }
+
+// // std::convert::From<Element<std::boxed::Box<(dyn IAttribute + 'static)>, std::boxed::Box<(dyn IElement + 'static)>>>` is not implemented for `Element<RootAttributes, RootElements>`
+// impl From<Element<Box<IAttribute>, Box<IElement>>> for Element<RootAttributes, RootElements> {
+//     fn from(element: Element<Box<IAttribute>, Box<IElement>>) -> Element<RootAttributes, RootElements> {
+//         // let attributes: Vec<RootAttributes> = element.attributes.into_iter().map(|item| item.to_owned().into()).collect();
+//         let attributes: Vec<RootAttributes> = element.attributes.into_iter().map(|item| item.into()).collect();
+//         let children: Vec<RootElements> = element.children.into_iter().map(|item| item.to_owned().into()).collect();
+//         Element::new(element.kind, attributes, children)
+//     }
+// }
+
 
 // impl <T> IElement for T where T: Clone + IHtmlElement {}
 
