@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 
+use std::marker::{ PhantomData };
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{ Debug };
 use std::hash::{Hash, Hasher};
@@ -15,8 +16,17 @@ where
 {}
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct OnClickEvent {}
+
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum EventTypes {
-    OnClick,
+    OnClick (OnClickEvent),
+}
+
+impl From<OnClickEvent> for EventTypes {
+    fn from(src: OnClickEvent) -> EventTypes {
+        EventTypes::OnClick (src)
+    }
 }
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -59,16 +69,24 @@ pub struct CustomAttribute {
     pub value: String,
 }
 
+impl<TEvents> IAttribute<TEvents> for CustomAttribute where TEvents: IEvent {}
+
 #[derive(Clone, Debug)]
-pub struct ClassAttribute {}
+pub struct ClassAttribute {
+    pub values: Vec<String>,
+}
+
+impl<TEvents> IAttribute<TEvents> for ClassAttribute where TEvents: IEvent {}
 
 #[derive(Clone, Debug)]
 pub struct EventAttribute<TEvents>
 where
     TEvents: IEvent,
 {
-    event: TEvents,
+    event: Event<TEvents>,
 }
+
+impl<TEvents> IAttribute<TEvents> for EventAttribute<TEvents> where TEvents: IEvent {}
 
 #[derive(Clone, Debug)]
 pub enum AttributeTypes<TEvents>
@@ -154,6 +172,16 @@ where
 
 pub type Element<TEvents> = Node<ElementDatum<TEvents>>;
 
+impl<TEvents> From<Node<ElementDatum<TEvents>>> for ElementTypes
+where
+    TEvents: IEvent,
+{
+    fn from(src: Node<ElementDatum<TEvents>>) -> ElementTypes {
+        src.into()
+    }
+}
+impl<TEvents> IElement<TEvents> for Element<TEvents> where TEvents: IEvent {}
+
 impl<TEvents> Element<TEvents>
 where
     TEvents: IEvent,
@@ -166,54 +194,102 @@ where
     }
 }
 
-pub fn element<TEvents>(kind: &str, attributes: &[AttributeTypes<TEvents>], children: &[Element<TEvents>]) -> Element<TEvents>
+pub trait IAttribute<TEvents>: Into<AttributeTypes<TEvents>> where TEvents: IEvent {}
+
+// pub trait IElement<TEvents>: Into<ElementTypes> where TEvents: IEvent {}
+pub trait IElement<TEvents>: Into<Element<TEvents>> where TEvents: IEvent {}
+
+// pub fn element<TEvents, TAttributes, TChildren>(kind: &str, attributes: &[TAttributes], children: &[TChildren]) -> Element<TEvents>
+// where
+//     TEvents: IEvent + Clone,
+//     TAttributes: IAttribute<TEvents> + Clone,
+//     TChildren: IElement<TEvents> + Clone,
+// {
+//     let element = CustomElement { kind: kind.to_owned() }.into();
+//     let attributes = attributes.into_iter().map(|item| (*item).to_owned().into()).collect();
+//     let children = children.into_iter().map(|item| {
+//         let temp: Element<TEvents> = (*item).to_owned().into();
+//         temp
+//     }).collect();
+//     // let children = children.to_vec();
+
+//     Element::<TEvents>::new(
+//         ElementDatum::<TEvents> {
+//             element,
+//             attributes,
+//         },
+//         children,
+//     )
+// }
+
+#[derive(Clone, Debug)]
+pub struct Empty {}
+
+pub struct Html<TEvents, TAttributes=CustomAttribute, TChildren=Empty>
 where
     TEvents: IEvent + Clone,
+    TAttributes: IAttribute<TEvents> + Clone,
+    TChildren: IElement<TEvents> + Clone,
 {
-    let element = CustomElement { kind: kind.to_owned() }.into();
-    let attributes = attributes.to_vec();
-    let children = children.to_vec();
-    Element::<TEvents>::new(
-        ElementDatum::<TEvents> {
-            element,
-            attributes,
-        },
-        children,
-    )
+    events: PhantomData<TEvents>,
+    attributes: PhantomData<TAttributes>,
+    children: PhantomData<TChildren>,
 }
-// #[derive(Clone, Debug)]
-// pub struct Element<TAttributes> {
-//     pub kind: String,
-//     pub attributes: Vec<TAttributes>,
-//     pub children: Vec<Element<TAttributes>>,
-// }
 
-// impl<TAttributes> Element<TAttributes>
+impl<TEvents, TAttributes, TChildren> Html<TEvents, TAttributes, TChildren>
+where
+    TEvents: IEvent + Clone,
+    TAttributes: IAttribute<TEvents> + Clone,
+    TChildren: IElement<TEvents> + Clone,
+{
+    pub fn element(kind: &str, attributes: &[TAttributes], children: &[TChildren]) -> Element<TEvents>
+    {
+        let element = CustomElement { kind: kind.to_owned() }.into();
+        let attributes = attributes.into_iter().map(|item| (*item).to_owned().into()).collect();
+        let children = children.into_iter().map(|item| {
+            let temp: Element<TEvents> = (*item).to_owned().into();
+            temp
+        }).collect();
+        // let children = children.to_vec();
+
+        Element::<TEvents>::new(
+            ElementDatum::<TEvents> {
+                element,
+                attributes,
+            },
+            children,
+        )
+    }
+}
+
+// pub fn element<TEvents>(kind: &str, attributes: &[AttributeTypes<TEvents>], children: &[Element<TEvents>]) -> Element<TEvents>
 // where
-//     TAttributes: Clone + std::fmt::Debug,
+//     TEvents: IEvent + Clone,
 // {
-//     pub fn new(kind: &str, attributes: &[TAttributes], children: &[Element<TAttributes>]) -> Element<TAttributes> {
-//         Element {
-//             kind: kind.to_owned(),
-//             attributes: attributes.to_vec(),
-//             children: children.to_vec(),
-//         }
-//     }
+//     let element = CustomElement { kind: kind.to_owned() }.into();
+//     let attributes = attributes.to_vec();
+//     let children = children.to_vec();
+//     Element::<TEvents>::new(
+//         ElementDatum::<TEvents> {
+//             element,
+//             attributes,
+//         },
+//         children,
+//     )
 // }
 
-// pub fn element<TAttributes, TChildren>(kind: String, attributes: &[TAttributes], children: &[TChildren]) -> ()
-// where
-//     TChildren: Into<Node<
-// {
+pub fn class(values: &[&str]) -> ClassAttribute {
+    let values = values.into_iter().map(|item| (*item).to_owned()).collect();
+    ClassAttribute {
+        values,
+    }
+}
 
-// }
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
     t.hash(&mut s);
     s.finish()
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -221,10 +297,11 @@ mod tests {
 
     #[test]
     fn should_compose() {
-        let e: Element<()> = element("asdf",
-            &[ EventAttribute { event: () }.into()
+        let e: Element<()> = Html::element("asdf",
+            &[ ClassAttribute { values: vec!["blue_button".to_owned()] }.into()
+            , class(&["green_button", "black_button"])
             ],
-            &[ element("blah", &[], &[])
+            &[ Html::element("blah", &[], &[])
 
             ]);
 
