@@ -22,10 +22,16 @@ fn should_allow_base_element_in_more_specific_cases() {
     assert_eq!(1, html_element.children.len());
     // let t: Debug = &element;
     // println!("{:?}", t);
-    let child: ElementKinds = html_element.children[0].into();
-    println!("Html: {:?}", child);
+    // let html_element_base: &IElement = html_element.into();
+    // let child: ElementKinds = html_element.children[0].into();
+    // println!("Html: {:?}", child);
+    // let child_kind: &'static str = child.into();
+
+    // let child_kind: &'static str = html_element.children[0].into();
+    
     println!("{:?}", html_element.children[0]);
-    assert_eq!(element.kind, html_element.children[0], "fail");
+    
+    // assert_eq!(element.kind, {let t: &'static str = html_element.children[0].into(); t}, "fail");
     println!("{:?}", html_element);
 
     assert!(false);
