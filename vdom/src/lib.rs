@@ -1,60 +1,45 @@
-#![no_std]
+// #![no_std]
 
-// pub trait IBase: std::fmt::Debug + PartialEq {}
+// pub trait IAttribute {}
+pub trait IAttribute: std::fmt::Debug {}
 
-// impl<T> IBase for T
-// where
-//     T: std::fmt::Debug + PartialEq,
-// {}
-
-pub trait IAttribute<'a,>{//: std::fmt::Debug {
-    fn key(&self) -> &'a str;
-}
-
-
-
-// impl IBase for IAttribute {}
-
-impl<'a> IAttribute<'a> for &'a IAttribute<'a> {
-    fn key(&self) -> &'a str {
-        (*self).key()
-    }
-}
+impl<'a> IAttribute for &'a IAttribute {}
 
 // pub trait IElement {}
-pub trait IElement<'a>{//: std::fmt::Debug {
-    fn kind(&self) -> &'a str;
+pub trait IElement: std::fmt::Debug {}
+
+impl<'a> IElement for &'a IElement {}
+
+#[derive(Clone, Debug)]
+pub enum ElementKinds<'a> {
+    Custom (&'a str),
+    Html,
+    Body,
 }
 
-// impl IBase for IElement {}
-
-impl<'a> IElement<'a> for &'a IElement<'a> {
-    fn kind(&self) -> &'a str {
-        (*self).kind()
-    }
-}
-
-#[derive(Clone, Debug)]//, PartialEq, Eq)]
-pub struct Element<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b>
+#[derive(Clone, Debug)]
+pub struct Element<'a, TAttributes: 'a, TChildren: 'a>
 where
-    TAttributes: IAttribute<'b> + Clone,
-    &'b IAttribute<'b>: From<TAttributes>,
-    TChildren: IElement<'b> + Clone,
-    &'b IElement<'b>: From<TChildren>,
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IElement + Clone,
+    &'a IElement: From<TChildren>,
 {
+    // pub kind: &'a str,
     pub kind: &'a str,
-    pub attributes: &'b [TAttributes],
-    pub children: &'b [TChildren],
+    pub attributes: &'a [TAttributes],
+    pub children: &'a [TChildren],
 }
 
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> Element<'a, 'b, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TChildren: 'a> Element<'a, TAttributes, TChildren>
 where
-    TAttributes: IAttribute<'b> + Clone,
-    &'b IAttribute<'b>: From<TAttributes>,
-    TChildren: IElement<'b> + Clone,
-    &'b IElement<'b>: From<TChildren>,
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IElement + Clone,
+    &'a IElement: From<TChildren>,
 {
-    pub fn new(kind: &'a str, attributes: &'b [TAttributes], children: &'b [TChildren]) -> Element<'a, 'b, TAttributes, TChildren> {
+    // pub fn new(kind: &'a str, attributes: &'a [TAttributes], children: &'a [TChildren]) -> Element<'a, TAttributes, TChildren> {
+    pub fn new(kind: &'a str, attributes: &'a [TAttributes], children: &'a [TChildren]) -> Element<'a, TAttributes, TChildren> {
         Element {
             kind,
             attributes,
@@ -63,192 +48,158 @@ where
     }
 }
 
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> IElement<'a> for Element<'a, 'b, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TChildren: 'a> From<Element<'a, TAttributes, TChildren>> for ElementKinds<'a>
 where
-    TAttributes: IAttribute<'b> + Clone,
-    &'b IAttribute<'b>: From<TAttributes>,
-    TChildren: IElement<'b> + Clone,
-    &'b IElement<'b>: From<TChildren>,
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IElement + Clone,
+    &'a IElement: From<TChildren>,
 {
-    fn kind(&self) -> &'a str {
-        self.kind
-        // &self.kind.to_owned()
-    }
-}
-
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> IHtmlElement<'a> for Element<'a, 'b, TAttributes, TChildren>
-where
-    TAttributes: IAttribute<'b> + Clone,
-    &'b IAttribute<'b>: From<TAttributes>,
-    TChildren: IElement<'b> + Clone,
-    &'b IElement<'b>: From<TChildren>,
-{}
-
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> IBodyElement<'a> for Element<'a, 'b, TAttributes, TChildren>
-where
-    TAttributes: IAttribute<'b> + Clone,
-    &'b IAttribute<'b>: From<TAttributes>,
-    TChildren: IElement<'b> + Clone,
-    &'b IElement<'b>: From<TChildren>,
-{}
-
-pub trait IHtmlAttribute<'a>: IAttribute<'a> {}
-// pub trait IHtmlAttribute: IAttribute<'a> + std::fmt::Debug {}
-
-impl<'a> IHtmlAttribute<'a> for &'a IHtmlAttribute<'a> {}
-
-impl<'a> IAttribute<'a> for &'a IHtmlAttribute<'a> {
-    fn key(&self) -> &'a str {
-        (*self).key()
-    }
-}
-
-pub trait IHtmlElement<'a>: IElement<'a> {}//+ std::fmt::Debug {}
-
-impl<'a> IHtmlElement<'a> for &'a IHtmlElement<'a> {}
-
-impl<'a> IElement<'a> for &'a IHtmlElement<'a> {
-    fn kind(&self) -> &'a str {
-        (*self).kind()
-    }
-}
-
-impl<'a> IHtmlElement<'a> for &'a IElement<'a> {}
-
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> From<&'a IHtmlElement<'a>> for Element<'a, 'b, TAttributes, TChildren>
-where
-    TAttributes: IAttribute<'b> + Clone,
-    &'b IAttribute<'b>: From<TAttributes>,
-    TChildren: IElement<'b> + Clone,
-    &'b IElement<'b>: From<TChildren>,
-{
-    fn from(src: &'a IHtmlElement) -> Element<'a, 'b, TAttributes, TChildren> {
-        Element {
-            kind: src.kind(),
-            attributes: &[],
-            children: &[],
+    fn from(src: Element<'a, TAttributes, TChildren>) -> ElementKinds<'a> {
+        match src.kind {
+            "html" => ElementKinds::Html,
+            _ => ElementKinds::Custom(src.kind),
         }
     }
 }
 
+impl<'a, TAttributes: 'a, TChildren: 'a> IElement for Element<'a, TAttributes, TChildren>
+where
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IElement + Clone,
+    &'a IElement: From<TChildren>,
+{}
+
+impl<'a, TAttributes: 'a, TChildren: 'a> IHtmlElement for Element<'a, TAttributes, TChildren>
+where
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IElement + Clone,
+    &'a IElement: From<TChildren>,
+{}
+
+impl<'a, TAttributes: 'a, TChildren: 'a> IBodyElement for Element<'a, TAttributes, TChildren>
+where
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IElement + Clone,
+    &'a IElement: From<TChildren>,
+{}
+
+pub trait IHtmlAttribute: IAttribute {}
+
+impl<'a> IHtmlAttribute for &'a IHtmlAttribute {}
+
+impl<'a> IAttribute for &'a IHtmlAttribute {}
+
+pub trait IHtmlElement: IElement {}
+
+impl<'a> IHtmlElement for &'a IHtmlElement {}
+
+impl<'a> IElement for &'a IHtmlElement {}
+
+impl<'a> IHtmlElement for &'a IElement {}
+
 #[derive(Clone, Debug)]
-pub struct HtmlElement<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b>
+pub struct HtmlElement<'a, TAttributes: 'a, TChildren: 'a>
 where
 {
-    pub kind: &'a str,
-    pub attributes: &'b [TAttributes],
-    pub children: &'b [TChildren],
+    // pub kind: &'a str,
+    pub attributes: &'a [TAttributes],
+    pub children: &'a [TChildren],
 }
 
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> HtmlElement<'a, 'b, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TChildren: 'a> HtmlElement<'a, TAttributes, TChildren>
 where
-    TAttributes: IHtmlAttribute<'b> + IAttribute<'b> + Clone,
-    &'b IHtmlAttribute<'b>: From<TAttributes>,
-    TChildren: IHtmlElement<'b> + IElement<'b> + Clone,
-    &'b IHtmlElement<'b>: From<TChildren>,
+    TAttributes: IHtmlAttribute + IAttribute + Clone,
+    &'a IHtmlAttribute: From<TAttributes>,
+    TChildren: IHtmlElement + IElement + Clone,
+    &'a IHtmlElement: From<TChildren>,
 {
-    pub fn new(attributes: &'b [TAttributes], children: &'b [TChildren]) -> Self {
+    pub fn new(attributes: &'a [TAttributes], children: &'a [TChildren]) -> Self {
         HtmlElement {
-            kind: "html",
             attributes,
             children,
         }
     }
 }
 
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> From<&'a HtmlElement<'a, 'b, TAttributes, TChildren>> for Element<'a, 'b, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TChildren: 'a> From<&'a HtmlElement<'a, TAttributes, TChildren>> for Element<'a, TAttributes, TChildren>
 where
-    TAttributes: IHtmlAttribute<'b> + IAttribute<'b> + Clone,
-    &'b IHtmlAttribute<'b>: From<TAttributes>,
-    &'b IAttribute<'b>: From<TAttributes>,
-    TChildren: IHtmlElement<'b> + IElement<'b> + Clone,
-    &'b IHtmlElement<'b>: From<TChildren>,
-    &'b IElement<'b>: From<TChildren>,
+    TAttributes: IHtmlAttribute + IAttribute + Clone,
+    &'a IHtmlAttribute: From<TAttributes>,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IHtmlElement + IElement + Clone,
+    &'a IHtmlElement: From<TChildren>,
+    &'a IElement: From<TChildren>,
 {
-    fn from(src: &'a HtmlElement<'a, 'b, TAttributes, TChildren>) -> Element<'a, 'b, TAttributes, TChildren> {
-        Element::new(src.kind, src.attributes, src.children)
+    fn from(src: &'a HtmlElement<'a, TAttributes, TChildren>) -> Element<'a, TAttributes, TChildren> {
+        Element::new("html", src.attributes, src.children)
     }
 }
 
-impl<'a, 'b: 'a, TAttributes: 'b, TChildren: 'b> IElement<'a> for HtmlElement<'a, 'b, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TChildren: 'a> IElement for HtmlElement<'a, TAttributes, TChildren>
 where
-    TAttributes: IHtmlAttribute<'b> + IAttribute<'b> + Clone,
-    &'b IHtmlAttribute<'b>: From<TAttributes>,
-    TChildren: IHtmlElement<'b> + IElement<'b> + Clone,
-    &'b IHtmlElement<'b>: From<TChildren>,
-{
-    fn kind(&self) -> &'a str {
-        self.kind
-        // &self.kind.to_owned()
-    }
-}
+    TAttributes: IHtmlAttribute + IAttribute + Clone,
+    &'a IHtmlAttribute: From<TAttributes>,
+    TChildren: IHtmlElement + IElement + Clone,
+    &'a IHtmlElement: From<TChildren>,
+{}
 
-pub trait IBodyAttribute<'a>: IAttribute<'a> {}//+ std::fmt::Debug {}
+pub trait IBodyAttribute: IAttribute {}
 
-impl<'a> IBodyAttribute<'a> for &'a IBodyAttribute<'a> {}
+impl<'a> IBodyAttribute for &'a IBodyAttribute {}
 
-impl<'a> IAttribute<'a> for &'a IBodyAttribute<'a> {
-    fn key(&self) -> &'a str {
-        (*self).key()//.to_owned()
-    }
-}
+impl<'a> IAttribute for &'a IBodyAttribute {}
 
-pub trait IBodyElement<'a>: IElement<'a> {}//+ std::fmt::Debug {}
+pub trait IBodyElement: IElement {}
 
-impl<'a> IBodyElement<'a> for &'a IBodyElement<'a> {}
+impl<'a> IBodyElement for &'a IBodyElement {}
 
-impl<'a> IElement<'a> for &'a IBodyElement<'a> {
-    fn kind(&self) -> &'a str {
-        (*self).kind()
-    }
-}
+impl<'a> IElement for &'a IBodyElement {}
 
-impl<'a> IBodyElement<'a> for &'a IElement<'a> {}
+impl<'a> IBodyElement for &'a IElement {}
 
 #[derive(Clone, Debug)]
 pub struct BodyElement<'a, TAttributes: 'a, TChildren: 'a>
 where
 {
-    pub kind: &'a str,
+    // pub kind: &'a str,
     pub attributes: &'a [TAttributes],
     pub children: &'a [TChildren],
 }
 
 impl<'a, TAttributes: 'a, TChildren: 'a> BodyElement<'a, TAttributes, TChildren>
 where
-    TAttributes: IBodyAttribute<'a> + IAttribute<'a> + Clone,
-    &'a IBodyAttribute<'a>: From<TAttributes>,
-    TChildren: IBodyElement<'a> + IElement<'a> + Clone,
-    &'a IBodyElement<'a>: From<TChildren>,
+    TAttributes: IBodyAttribute + IAttribute + Clone,
+    &'a IBodyAttribute: From<TAttributes>,
+    TChildren: IBodyElement + IElement + Clone,
+    &'a IBodyElement: From<TChildren>,
 {
     pub fn new(attributes: &'a [TAttributes], children: &'a [TChildren]) -> Self {
         BodyElement {
-            kind: "body",
+            // kind: "body",
             attributes,
             children,
         }
     }
 }
 
-impl<'a, TAttributes: 'a, TChildren: 'a> IElement<'a> for BodyElement<'a, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TChildren: 'a> IElement for BodyElement<'a, TAttributes, TChildren>
 where
-    TAttributes: IBodyAttribute<'a> + IAttribute<'a> + Clone,
-    &'a IBodyAttribute<'a>: From<TAttributes>,
-    TChildren: IBodyElement<'a> + IElement<'a> + Clone,
-    &'a IBodyElement<'a>: From<TChildren>,
-{
-    fn kind(&self) -> &'a str {
-        self.kind
-        // &self.kind.to_owned()
-    }
-}
+    TAttributes: IBodyAttribute + IAttribute + Clone,
+    &'a IBodyAttribute: From<TAttributes>,
+    TChildren: IBodyElement + IElement + Clone,
+    &'a IBodyElement: From<TChildren>,
+{}
 
-impl<'a, TAttributes: 'a, TChildren: 'a> IHtmlElement<'a> for BodyElement<'a, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TChildren: 'a> IHtmlElement for BodyElement<'a, TAttributes, TChildren>
 where
-    TAttributes: IBodyAttribute<'a> + Clone,
-    &'a IBodyAttribute<'a>: From<TAttributes>,
-    TChildren: IBodyElement<'a> + Clone,
-    &'a IBodyElement<'a>: From<TChildren>,
+    TAttributes: IBodyAttribute + Clone,
+    &'a IBodyAttribute: From<TAttributes>,
+    TChildren: IBodyElement + Clone,
+    &'a IBodyElement: From<TChildren>,
 {}
 
 #[derive(Clone, Debug)]
@@ -256,9 +207,4 @@ pub struct ClassAttribute<'a> {
     pub value: &'a str,
 }
 
-impl<'a> IAttribute<'a> for ClassAttribute<'a> {
-    fn key(&self) -> &'a str {
-        "class"
-        // &"class".to_owned()
-    }
-}
+impl<'a> IAttribute for ClassAttribute<'a> {}

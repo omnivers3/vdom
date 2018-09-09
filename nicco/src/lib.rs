@@ -15,7 +15,7 @@ use syn::parse::{Parse, ParseStream, Result};
 // use syn::spanned::Spanned;
 // use syn::{Expr, Ident, Lit, Type, Visibility};
 use syn::{Expr, Ident};
-use std::collections::VecDeque;
+// use std::collections::VecDeque;
 
 // struct Node<'a> {
 //     parent: Option<&'a Node<'a>>,
@@ -44,6 +44,7 @@ impl Parse for Context {
         let mut ctx = Context::new();
         parse_kind(input).map(|_| ctx)
         // parse_node();
+        // parse_kind(input).map
         // parse_kind(input).and_then(|kind_ident| {
         //     parse_attributes(kind_ident.to_owned(), input).map(|_attributes| {
         //         Node {
@@ -115,6 +116,7 @@ pub fn vdom(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     syn::parse2(input.into())
         // .map_err(|_| proc_macro::TokenStream::new())
         .map(|ctx: Context| {
+            // let t: Result<Ident> = input.parse();
             Span::call_site().unstable().warning("VDOM").emit();
             TokenStream::from(quote! {
                 // var a = 10;
