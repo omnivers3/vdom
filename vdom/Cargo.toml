@@ -9,7 +9,6 @@ repository = "https://github.com/omnivers3/vdom"
 readme = "../README.md"
 keywords = ["omnivers3", "web", "dom", "vdom"]
 license = "MIT"
+publish = false
 
 [dependencies]
-serde = "1"
-serde_derive = "1"

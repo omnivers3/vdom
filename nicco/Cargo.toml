@@ -1,0 +1,21 @@
+[package]
+name = "nicco"
+version = "0.1.0"
+authors = ["Perry Birch <perrybirch@vizidrix.com>"]
+description = "Elm inspired macros for use with vdom"
+documentation = "https://docs.rs/nicco"
+homepage = "https://github.com/omnivers3/nicco"
+repository = "https://github.com/omnivers3/nicco"
+readme = "../README.md"
+keywords = ["omnivers3", "web", "dom", "vdom", "nicco"]
+license = "MIT"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "0.15.1", features = ["full"] }
+quote = "0.6"
+proc-macro2 = { version = "0.4", features = ["nightly"] }
+vdom = { path = "../vdom" }
