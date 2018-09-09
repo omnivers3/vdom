@@ -1,14 +1,19 @@
 // #![no_std]
 
 // pub trait IAttribute {}
+
+// pub trait IElement {}
+
 pub trait IAttribute: std::fmt::Debug {}
+
+pub trait IElement: std::fmt::Debug {}
 
 impl<'a> IAttribute for &'a IAttribute {}
 
-// pub trait IElement {}
-pub trait IElement: std::fmt::Debug {}
-
 impl<'a> IElement for &'a IElement {}
+
+pub static Html: &'static str = "html";
+pub static Body: &'static str = "body";
 
 #[derive(Clone, Debug)]
 pub enum ElementKinds<'a> {
@@ -16,6 +21,16 @@ pub enum ElementKinds<'a> {
     Html,
     Body,
 }
+
+// impl<'a> From<ElementKinds<'a>> for &'a str {
+//     fn from(src: ElementKinds) -> &'a str {
+//         match src {
+//             ElementKinds::Custom (kind) => kind,
+//             ElementKinds::Html => Html,
+//             ElementKinds::Body => Body,
+//         }
+//     }
+// }
 
 #[derive(Clone, Debug)]
 pub struct Element<'a, TAttributes: 'a, TChildren: 'a>
@@ -25,7 +40,6 @@ where
     TChildren: IElement + Clone,
     &'a IElement: From<TChildren>,
 {
-    // pub kind: &'a str,
     pub kind: &'a str,
     pub attributes: &'a [TAttributes],
     pub children: &'a [TChildren],
@@ -38,7 +52,6 @@ where
     TChildren: IElement + Clone,
     &'a IElement: From<TChildren>,
 {
-    // pub fn new(kind: &'a str, attributes: &'a [TAttributes], children: &'a [TChildren]) -> Element<'a, TAttributes, TChildren> {
     pub fn new(kind: &'a str, attributes: &'a [TAttributes], children: &'a [TChildren]) -> Element<'a, TAttributes, TChildren> {
         Element {
             kind,
@@ -58,6 +71,7 @@ where
     fn from(src: Element<'a, TAttributes, TChildren>) -> ElementKinds<'a> {
         match src.kind {
             "html" => ElementKinds::Html,
+            "body" => ElementKinds::Body,
             _ => ElementKinds::Custom(src.kind),
         }
     }
@@ -101,11 +115,14 @@ impl<'a> IElement for &'a IHtmlElement {}
 
 impl<'a> IHtmlElement for &'a IElement {}
 
+impl<'a> From<&'a IHtmlElement> for ElementKinds<'a> {
+    fn from(src: &'a IHtmlElement) -> ElementKinds<'a> {
+        ElementKinds::Html
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct HtmlElement<'a, TAttributes: 'a, TChildren: 'a>
-where
-{
-    // pub kind: &'a str,
+pub struct HtmlElement<'a, TAttributes: 'a, TChildren: 'a> {
     pub attributes: &'a [TAttributes],
     pub children: &'a [TChildren],
 }
@@ -135,7 +152,7 @@ where
     &'a IElement: From<TChildren>,
 {
     fn from(src: &'a HtmlElement<'a, TAttributes, TChildren>) -> Element<'a, TAttributes, TChildren> {
-        Element::new("html", src.attributes, src.children)
+        Element::new(Html, src.attributes, src.children)
     }
 }
 
@@ -165,7 +182,6 @@ impl<'a> IBodyElement for &'a IElement {}
 pub struct BodyElement<'a, TAttributes: 'a, TChildren: 'a>
 where
 {
-    // pub kind: &'a str,
     pub attributes: &'a [TAttributes],
     pub children: &'a [TChildren],
 }
@@ -179,10 +195,23 @@ where
 {
     pub fn new(attributes: &'a [TAttributes], children: &'a [TChildren]) -> Self {
         BodyElement {
-            // kind: "body",
             attributes,
             children,
         }
+    }
+}
+
+impl<'a, TAttributes: 'a, TChildren: 'a> From<&'a BodyElement<'a, TAttributes, TChildren>> for Element<'a, TAttributes, TChildren>
+where
+    TAttributes: IBodyAttribute + IAttribute + Clone,
+    &'a IBodyAttribute: From<TAttributes>,
+    &'a IAttribute: From<TAttributes>,
+    TChildren: IBodyElement + IElement + Clone,
+    &'a IBodyElement: From<TChildren>,
+    &'a IElement: From<TChildren>,
+{
+    fn from(src: &'a BodyElement<'a, TAttributes, TChildren>) -> Element<'a, TAttributes, TChildren> {
+        Element::new(Body, src.attributes, src.children)
     }
 }
 

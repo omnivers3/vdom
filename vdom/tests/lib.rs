@@ -22,9 +22,10 @@ fn should_allow_base_element_in_more_specific_cases() {
     assert_eq!(1, html_element.children.len());
     // let t: Debug = &element;
     // println!("{:?}", t);
-    // let child: ElementKinds = html_element.children[0].into();
+    let child: ElementKinds = html_element.children[0].into();
+    println!("Html: {:?}", child);
     println!("{:?}", html_element.children[0]);
-    // assert_eq!(element.kind, html_element.children[0].kind, "fail");
+    assert_eq!(element.kind, html_element.children[0], "fail");
     println!("{:?}", html_element);
 
     assert!(false);
