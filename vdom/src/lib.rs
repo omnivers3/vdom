@@ -1,21 +1,48 @@
-// #![no_std]
+#![no_std]
+#![feature(associated_type_defaults)]
 
-// pub trait IAttribute {}
+use core::marker::PhantomData;
+
+pub trait IAttribute {
+    type TEvents: Clone = ();
+}
 
 // pub trait IElement {}
 
-pub trait IAttribute: std::fmt::Debug {}
+// pub trait IAttribute: std::fmt::Debug {}
 
-pub trait IElement: std::fmt::Debug {}
+// pub trait IElementKind {
+//     fn kind(&self) -> &'static str;
+// }
 
-impl<'a> IAttribute for &'a IAttribute {}
+pub trait IElement<'a> {//: std::fmt::Debug {
+    // type TKind: IElementKind;
+    type TAttributes: Clone;
 
-impl<'a> IElement for &'a IElement {}
+    fn kind(&self) -> ElementKinds;
+    fn attributes(&self) -> &'a [Self::TAttributes];
+    
+}
+
+pub trait INode<'a> {
+    type TChildren: Clone;
+
+    fn children(&self) -> &'a [Self::TChildren];
+}
+
+impl<'a, TEvents> IAttribute for &'a IAttribute<TEvents=TEvents>
+where
+    TEvents: Clone,
+{
+    type TEvents = TEvents;
+}
+
+// impl<'a, TKind> IElement for &'a IElement<TKind=TKind> {}
 
 pub static HtmlKind: &'static str = "html";
 pub static BodyKind: &'static str = "body";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ElementKinds {
     Custom (&'static str),
     Html,
@@ -42,6 +69,92 @@ impl From<&'static str> for ElementKinds {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Element<'a, TAttributes: 'a, TEvents: 'a>//, TChildren: 'a>
+where
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute<TEvents=TEvents>: From<TAttributes>,
+//     TChildren: IElement<'a> + Clone,
+//     &'a IElement<'a>: From<TChildren>,
+{
+    events: PhantomData<TEvents>,
+    pub kind: ElementKinds,
+    pub attributes: &'a [TAttributes],
+    // pub children: &'a [TChildren],
+}
+
+pub type StaticElement<'a, TAttributes: 'a>
+where
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute<TEvents=()>: From<TAttributes>
+= Element<'a, TAttributes, ()>;
+// pub trait ICustomElement: IElement<'a, TAttributes=IAttribute, TChildren=
+// pub type CustomElement<'a> = Element<'a, IAttribute, IElement<'a, TAtt>>;
+
+// impl<'a, TAttributes: 'a, TChildren: 'a> Element<'a, TAttributes, TChildren>
+// where
+//     TAttributes: IAttribute + Clone,
+//     &'a IAttribute: From<TAttributes>,
+//     TChildren: IElement<'a> + Clone,
+//     &'a IElement<'a>: From<TChildren>,
+// {
+//     pub fn new(kind: &'static str, attributes: &'a [TAttributes], children: &'a [TChildren]) -> Element<'a, TAttributes, TChildren> {
+//         Element {
+//             kind: kind.into(),
+//             attributes,
+//             children,
+//         }
+//     }
+// }
+
+impl<'a, TAttributes, TEvents> Element<'a, TAttributes, TEvents>
+where
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute<TEvents=TEvents>: From<TAttributes>,
+{
+    pub fn new(kind: ElementKinds, attributes: &'a [TAttributes]) -> Self {
+        Element {
+            events: PhantomData,
+            kind,
+            attributes,
+        }
+    }
+
+    pub fn custom(kind: &'static str, attributes: &'a [TAttributes]) -> Self {
+        Element::new(kind.into(), attributes)
+        // Element {
+        //     kind: kind.into(),
+        //     attributes,
+        // }
+    }
+}
+
+// impl<'a, TAttributes: 'a, TChildren: 'a> IElement<'a> for Element<'a, TAttributes, TChildren>
+impl<'a, TAttributes: 'a, TEvents> IElement<'a> for Element<'a, TAttributes, TEvents>
+where
+    TAttributes: IAttribute + Clone,
+    &'a IAttribute<TEvents=TEvents>: From<TAttributes>,
+    // TChildren: IElement<'a> + Clone,
+    // &'a IElement<'a>: From<TChildren>,
+{
+    type TAttributes = TAttributes;// IAttribute;
+    // type TChildren = TChildren;//IElement<'a, TAttributes=TAttributes, TChildren=TChildren>;
+
+    fn kind(&self) -> ElementKinds {
+        // ElementKinds::Custom
+        self.kind.clone()
+    }
+
+    fn attributes(&self) -> &'a [TAttributes] {
+        self.attributes
+    }
+
+    // fn children(&self) -> &'a [TChildren] {
+    //     self.children
+    // }
+}
+
+/*
 #[derive(Clone, Debug)]
 pub struct Element<'a, TAttributes: 'a, TChildren: 'a>
 where
@@ -274,3 +387,4 @@ pub struct ClassAttribute<'a> {
 }
 
 impl<'a> IAttribute for ClassAttribute<'a> {}
+*/
